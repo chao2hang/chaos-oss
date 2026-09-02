@@ -22,6 +22,9 @@ jobs:
         run: git tag -d beta
         continue-on-error: true
 
-      - run: npx changelogithub # or changelogithub@0.12 if ensure the stable result
+      # constrain the changelog to the fork's own history: this repo
+      # carries the whole upstream history and GitHub caps release notes
+      # at 125k chars
+      - run: npx changelogithub --from 89077c35
         env:
           GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}

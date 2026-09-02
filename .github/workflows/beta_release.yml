@@ -37,7 +37,7 @@ jobs:
         id: changelog
         run: |
           git tag -l
-          npx changelogithub --output CHANGELOG.md
+          npx changelogithub --from 89077c35 --output CHANGELOG.md
 
       - name: Upload assets to beta release
         env:

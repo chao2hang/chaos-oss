@@ -1,0 +1,19 @@
+{
+  "name": "chaos-oss",
+  "short_name": "chaos-oss",
+  "description": "A refined OpenList build",
+  "theme_color": "#0a0a0a",
+  "background_color": "#0a0a0a",
+  "icons": [
+    {
+      "src": "/chaos-assets/logo/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "/chaos-assets/logo/apple-touch-icon.svg",
+      "sizes": "180x180",
+      "type": "image/svg+xml"
+    }
+  ]
+}

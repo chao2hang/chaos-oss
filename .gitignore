@@ -22,6 +22,7 @@ output/
 # vendor/
 /bin/*
 *.json
+!public/theme/manifest-fragment.json
 !renovate.json
 /build
 /data/

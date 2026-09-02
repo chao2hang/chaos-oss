@@ -7,8 +7,12 @@ LABEL stage=go-builder
 # cannot reach proxy.golang.org (e.g. CN)
 ARG GOPROXY=https://proxy.golang.org,direct
 ENV GOPROXY=${GOPROXY}
+# npm registry override for restricted networks (alpine's nodejs does not
+# bundle npm; the build.sh frontend path needs it to activate pnpm)
+ARG NPM_CONFIG_REGISTRY=
+ENV NPM_CONFIG_REGISTRY=${NPM_CONFIG_REGISTRY}
 WORKDIR /app/
-RUN apk add --no-cache bash curl jq gcc git go musl-dev nodejs
+RUN apk add --no-cache bash curl jq gcc git go musl-dev nodejs npm
 COPY go.mod go.sum ./
 RUN go mod download
 COPY ./ ./
