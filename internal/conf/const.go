@@ -131,9 +131,11 @@ const (
 	LdapLoginTips         = "ldap_login_tips"
 
 	// s3
-	S3Buckets         = "s3_buckets"
-	S3AccessKeyId     = "s3_access_key_id"
-	S3SecretAccessKey = "s3_secret_access_key"
+	S3Buckets                  = "s3_buckets"
+	S3AccessKeyId              = "s3_access_key_id"
+	S3SecretAccessKey          = "s3_secret_access_key"
+	S3ReplicationDefaultPolicy = "s3_replication_default_policy" // "any" or "all"
+	S3ReplicationGraceSeconds  = "s3_replication_grace_seconds"  // background retry grace window
 
 	// qbittorrent
 	QbittorrentUrl      = "qbittorrent_url"

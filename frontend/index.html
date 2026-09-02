@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en" translate="no" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="same-origin" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="generator" content="chaos-oss" />
+    <meta name="theme-color" content="#0a0a0a" />
+    <meta name="google" content="notranslate" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" href="https://res.oplist.org/logo/logo.svg" type="image/svg+xml" sizes="any" />
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="apple-touch-icon" href="/logo/logo-180.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="chaos-oss" />
+    <title>Loading...</title>
+    <!--
+      The Go backend rewrites these `undefined` placeholders with the
+      configured site settings at startup (see server/static/static.go).
+      Keep the exact key names in sync with that file.
+    -->
+    <script>
+      window.OPENLIST_CONFIG = {
+        cdn: undefined,
+        base_path: undefined,
+        api: undefined,
+        main_color: undefined,
+      }
+      window.__dynamic_base__ = window.OPENLIST_CONFIG.cdn || ''
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

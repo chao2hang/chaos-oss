@@ -1,0 +1,106 @@
+/* =========================================================
+   chaos-oss · splash screen
+   Shown until the SPA mounts. Removed by #chaos-splash.style.opacity=0.
+   ========================================================= */
+#chaos-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--chaos-bg-0, #0a0a0a);
+  color: var(--chaos-fg-0, #fafafa);
+  font-family: var(--chaos-font-sans, -apple-system, BlinkMacSystemFont, sans-serif);
+  transition: opacity 280ms ease, visibility 0s linear 280ms;
+}
+#chaos-splash.is-hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+#chaos-splash .chaos-splash-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 18px;
+  padding: 24px;
+}
+#chaos-splash .chaos-splash-mark {
+  width: 40px;
+  height: 40px;
+  background: #fafafa;
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+#chaos-splash .chaos-splash-mark::before {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  border: 2px solid #0a0a0a;
+  border-right: 0;
+  border-bottom: 0;
+  width: 18px;
+  height: 18px;
+}
+#chaos-splash .chaos-splash-mark::after {
+  content: "";
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  background: #fafafa;
+  border-top: 2px solid #0a0a0a;
+  border-left: 2px solid #0a0a0a;
+  top: 8px;
+  right: 8px;
+}
+#chaos-splash .chaos-splash-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+#chaos-splash .chaos-splash-title {
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: #fafafa;
+}
+#chaos-splash .chaos-splash-meta {
+  font-family: var(--chaos-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11px;
+  color: rgba(250, 250, 250, 0.5);
+  letter-spacing: 0;
+}
+#chaos-splash .chaos-splash-bar {
+  width: 200px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.08);
+  position: relative;
+  overflow: hidden;
+  margin-top: 4px;
+}
+#chaos-splash .chaos-splash-bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 30%;
+  background: #fafafa;
+  animation: chaos-splash-progress 1.4s ease-in-out infinite;
+}
+@keyframes chaos-splash-progress {
+  0%   { transform: translateX(-100%); }
+  50%  { transform: translateX(280%); }
+  100% { transform: translateX(280%); }
+}
+#chaos-splash .chaos-splash-corner {
+  position: absolute;
+  font-family: var(--chaos-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11px;
+  color: rgba(250, 250, 250, 0.35);
+  letter-spacing: 0.04em;
+}
+#chaos-splash .chaos-splash-corner.tl { top: 16px; left: 18px; }
+#chaos-splash .chaos-splash-corner.tr { top: 16px; right: 18px; }
+#chaos-splash .chaos-splash-corner.bl { bottom: 16px; left: 18px; }
+#chaos-splash .chaos-splash-corner.br { bottom: 16px; right: 18px; }

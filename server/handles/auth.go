@@ -71,14 +71,77 @@ func loginHash(c *gin.Context, req *LoginReq) {
 			return
 		}
 	}
-	// generate token
+	// generate tokens
 	token, err := common.GenerateToken(user)
 	if err != nil {
 		common.ErrorResp(c, err, 500, true)
 		return
 	}
-	common.SuccessResp(c, gin.H{"token": token})
+	refreshToken, err := common.GenerateRefreshToken(user)
+	if err != nil {
+		common.ErrorResp(c, err, 500, true)
+		return
+	}
+	common.SuccessResp(c, gin.H{
+		"token":         token,
+		"refresh_token": refreshToken,
+		"expires_in":    common.AccessTokenTTL(),
+	})
 	model.LoginCache.Del(ip)
+}
+
+// RefreshToken exchanges a valid refresh token for a new access token
+// (and rotates the refresh token). This lets web clients survive
+// access-token expiry without re-entering credentials.
+//
+// POST /api/auth/refresh  { refresh_token: string }
+func RefreshToken(c *gin.Context) {
+	var req struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+	if err := c.ShouldBind(&req); err != nil {
+		common.ErrorResp(c, err, 400)
+		return
+	}
+	if req.RefreshToken == "" {
+		common.ErrorStrResp(c, "refresh_token is required", 400)
+		return
+	}
+	claims, err := common.ParseRefreshToken(req.RefreshToken)
+	if err != nil {
+		common.ErrorStrResp(c, err.Error(), 401)
+		return
+	}
+	user, err := op.GetUserByName(claims.Username)
+	if err != nil {
+		common.ErrorStrResp(c, "user no longer exists", 401)
+		return
+	}
+	// password changed since the refresh token was issued → force re-login
+	if user.PwdTS != claims.PwdTS {
+		common.ErrorStrResp(c, "credential has changed, please login again", 401)
+		return
+	}
+	// rotate: retire the presented refresh token, issue a fresh pair
+	if err := common.InvalidateToken(req.RefreshToken); err != nil {
+		common.ErrorResp(c, err, 500, true)
+		return
+	}
+	token, err := common.GenerateToken(user)
+	if err != nil {
+		common.ErrorResp(c, err, 500, true)
+		return
+	}
+	refreshToken, err := common.GenerateRefreshToken(user)
+	if err != nil {
+		common.ErrorResp(c, err, 500, true)
+		return
+	}
+	common.SuccessResp(c, gin.H{
+		"token":         token,
+		"refresh_token": refreshToken,
+		"expires_in":    common.AccessTokenTTL(),
+	})
 }
 
 type UserResp struct {
@@ -184,7 +247,17 @@ func LogOut(c *gin.Context) {
 	err := common.InvalidateToken(c.GetHeader("Authorization"))
 	if err != nil {
 		common.ErrorResp(c, err, 500)
-	} else {
-		common.SuccessResp(c)
+		return
 	}
+	// Best effort: also retire the refresh token if the client sends it.
+	var req struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+	if c.Request.ContentLength > 0 {
+		_ = c.ShouldBind(&req)
+		if req.RefreshToken != "" {
+			_ = common.InvalidateToken(req.RefreshToken)
+		}
+	}
+	common.SuccessResp(c)
 }

@@ -31,7 +31,8 @@ func Init(e *gin.Engine) {
 	g.Any("/ping", func(c *gin.Context) {
 		c.String(200, "pong")
 	})
-	g.GET("/favicon.ico", handles.Favicon)
+	// /favicon.ico is served by the static package from the dist root
+	// (see server/static/static.go) instead of redirecting.
 	g.GET("/robots.txt", handles.Robots)
 	g.GET("/manifest.json", static.ManifestJSON)
 	g.GET("/i/:link_name", handles.Plist)
@@ -71,9 +72,12 @@ func Init(e *gin.Engine) {
 	auth := api.Group("", middlewares.Auth(false))
 	webauthn := api.Group("/authn", middlewares.Authn)
 
-	api.POST("/auth/login", handles.Login)
-	api.POST("/auth/login/hash", handles.LoginHash)
-	api.POST("/auth/login/ldap", handles.LoginLdap)
+	api.POST("/auth/login", middlewares.LoginRateLimit, handles.Login)
+	api.POST("/auth/login/hash", middlewares.LoginRateLimit, handles.LoginHash)
+	api.POST("/auth/login/ldap", middlewares.LoginRateLimit, handles.LoginLdap)
+	// Refresh-token flow: exchange a long-lived refresh token for a new
+	// access token without re-entering credentials.
+	api.POST("/auth/refresh", handles.RefreshToken)
 	auth.GET("/me", handles.CurrentUser)
 	auth.POST("/me/update", handles.UpdateCurrent)
 	auth.GET("/me/sshkey/list", handles.ListMyPublicKey)
@@ -107,6 +111,10 @@ func Init(e *gin.Engine) {
 	fsAndShare(api.Group("/fs", middlewares.Auth(true)))
 	_task(auth.Group("/task", middlewares.AuthNotGuest))
 	_sharing(auth.Group("/share", middlewares.AuthNotGuest))
+	// Prometheus metrics for the S3 gateway (admin token required)
+	auth.GET("/metrics", middlewares.AuthAdmin, func(c *gin.Context) {
+		handles.S3Metrics(c)
+	})
 	admin(auth.Group("/admin", middlewares.AuthAdmin))
 	if flags.Debug || flags.Dev {
 		debug(g.Group("/debug"))
@@ -150,6 +158,12 @@ func admin(g *gin.RouterGroup) {
 	driver.GET("/names", handles.ListDriverNames)
 	driver.GET("/info", handles.GetDriverInfo)
 
+	// 123 云盘开放平台 OAuth 助手：前端拿到授权 code 后经由后端换取
+	// access_token（浏览器直连 open-api.123pan.com 会被 CORS 拦截）。
+	pan123 := g.Group("/123pan")
+	pan123.GET("/oauth_info", handles.Pan123OAuthInfo)
+	pan123.POST("/oauth_token", handles.Pan123OAuthToken)
+
 	setting := g.Group("/setting")
 	setting.GET("/get", handles.GetSetting)
 	setting.GET("/list", handles.ListSettings)
@@ -188,6 +202,18 @@ func admin(g *gin.RouterGroup) {
 	scan.POST("/start", handles.StartManualScan)
 	scan.POST("/stop", handles.StopManualScan)
 	scan.GET("/progress", handles.GetManualScanProgress)
+
+	// interactive login helper for the 189CloudPC driver
+	g.POST("/189cloud/login", handles.Cloud189Login)
+
+	// S3 gateway administration: access keys, audit log, stats
+	s3k := g.Group("/s3key")
+	s3k.GET("/list", handles.ListS3Keys)
+	s3k.POST("/create", handles.CreateS3Key)
+	s3k.POST("/update/:id", handles.UpdateS3Key)
+	s3k.POST("/delete/:id", handles.DeleteS3Key)
+	g.GET("/s3audit/list", handles.ListS3Audit)
+	g.GET("/s3/stats", handles.S3Stats)
 }
 
 func fsAndShare(g *gin.RouterGroup) {

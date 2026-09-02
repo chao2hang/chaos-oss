@@ -24,5 +24,12 @@ func NewServer(ctx context.Context) (h http.Handler, err error) {
 		gofakes3.WithIntegrityCheck(true), // Check Content-MD5 if supplied
 	)
 
-	return redirectHandler(faker.Server(), authPairs), nil
+	// gatekeeper: per-key permissions + audit + metrics, wrapping the
+	// redirect handler (so direct-link redirects are policed too)
+	return gatekeeper(redirectHandler(faker.Server(), authPairs)), nil
+}
+
+// Stats returns a snapshot of the S3 gateway counters (admin API).
+func Stats() StatsSnapshot {
+	return s3Metrics.Snapshot()
 }

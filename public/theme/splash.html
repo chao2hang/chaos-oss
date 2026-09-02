@@ -1,0 +1,44 @@
+<div id="chaos-splash" aria-hidden="true">
+      <div class="chaos-splash-inner">
+        <div class="chaos-splash-mark"></div>
+        <div class="chaos-splash-text">
+          <div class="chaos-splash-title">chaos-oss</div>
+          <div class="chaos-splash-meta">loading · v4.2.5</div>
+        </div>
+        <div class="chaos-splash-bar"></div>
+      </div>
+    </div>
+    <script>
+/* chaos-oss: dismiss splash once the SPA has actually mounted something */
+(function(){
+  var splash = document.getElementById('chaos-splash');
+  if (!splash) return;
+  var dismissed = false;
+  function dismiss(){
+    if (dismissed) return;
+    dismissed = true;
+    splash.classList.add('is-hidden');
+    setTimeout(function(){ if (splash && splash.parentNode) splash.parentNode.removeChild(splash); }, 320);
+  }
+  // strategy 1: when #root gets a child, wait a frame then dismiss
+  var root = document.getElementById('root');
+  if (root) {
+    var mo = new MutationObserver(function(){
+      if (root.childElementCount > 0) {
+        // give the SPA one more frame to paint
+        requestAnimationFrame(function(){ requestAnimationFrame(dismiss); });
+        mo.disconnect();
+      }
+    });
+    mo.observe(root, { childList: true });
+  }
+  // strategy 2: hard ceiling 8s in case the SPA stalls
+  setTimeout(dismiss, 8000);
+  // strategy 3: dismiss on first user interaction (click/key) as a safety
+  ['click','keydown','touchstart'].forEach(function(ev){
+    window.addEventListener(ev, function(){
+      setTimeout(dismiss, 1200);
+    }, { once: true, passive: true });
+  });
+})();
+</script>

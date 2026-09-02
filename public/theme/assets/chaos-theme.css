@@ -1,0 +1,397 @@
+/* =========================================================
+   chaos-oss · theme
+   Linear / Vercel style: monochrome, sharp edges, restrained.
+   - 4px grid spacing scale
+   - 1px hairline borders
+   - tiny radius (4-6px)
+   - font: Inter Variable for UI, JetBrains Mono for code
+   - single accent: #5b8def (cool blue) — used sparingly
+   ========================================================= */
+
+/* ---------- 1. self-hosted fonts ---------- */
+@font-face {
+  font-family: "InterVariable";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/chaos-assets/fonts/InterVariable.woff2") format("woff2-variations");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/chaos-assets/fonts/JetBrainsMono-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/chaos-assets/fonts/JetBrainsMono-Medium.woff2") format("woff2");
+}
+
+/* ---------- 2. global reset & base ---------- */
+:root {
+  --chaos-font-sans: "InterVariable", "Inter", -apple-system, BlinkMacSystemFont,
+    "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif,
+    "Apple Color Emoji", "Segoe UI Emoji";
+  --chaos-font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo,
+    Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --chaos-font-cjk: "InterVariable", -apple-system, BlinkMacSystemFont,
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Source Han Sans CN",
+    "Noto Sans CJK SC", sans-serif;
+
+  /* type scale - tight, mostly used values */
+  --chaos-fs-xs: 11px;
+  --chaos-fs-sm: 12px;
+  --chaos-fs-md: 13px;
+  --chaos-fs-base: 14px;
+  --chaos-fs-lg: 15px;
+  --chaos-fs-xl: 17px;
+  --chaos-fs-2xl: 20px;
+  --chaos-fs-3xl: 24px;
+
+  /* 4px grid */
+  --chaos-s-1: 4px;
+  --chaos-s-2: 8px;
+  --chaos-s-3: 12px;
+  --chaos-s-4: 16px;
+  --chaos-s-5: 20px;
+  --chaos-s-6: 24px;
+  --chaos-s-8: 32px;
+  --chaos-s-10: 40px;
+  --chaos-s-12: 48px;
+
+  /* radius - deliberately small */
+  --chaos-r-sm: 4px;
+  --chaos-r-md: 6px;
+  --chaos-r-lg: 8px;
+  --chaos-r-full: 9999px;
+
+  /* dark palette (default) - main theme */
+  --chaos-bg-0: #0a0a0a;          /* app background - near black */
+  --chaos-bg-1: #111113;          /* surface - panels */
+  --chaos-bg-2: #16161a;          /* raised surface - cards */
+  --chaos-bg-3: #1c1c21;          /* hover state */
+  --chaos-bg-4: #23232a;          /* selected/active */
+
+  --chaos-border-1: rgba(255, 255, 255, 0.08);
+  --chaos-border-2: rgba(255, 255, 255, 0.12);
+  --chaos-border-3: rgba(255, 255, 255, 0.18);
+
+  --chaos-fg-0: #fafafa;          /* primary text - off-white */
+  --chaos-fg-1: rgba(250, 250, 250, 0.86);
+  --chaos-fg-2: rgba(250, 250, 250, 0.62);
+  --chaos-fg-3: rgba(250, 250, 250, 0.42);
+  --chaos-fg-4: rgba(250, 250, 250, 0.28);
+
+  --chaos-accent: #6b88ff;        /* single accent - Vercel-ish blue */
+  --chaos-accent-soft: rgba(107, 136, 255, 0.12);
+  --chaos-accent-fg: #fafafa;
+  --chaos-accent-hover: #8aa1ff;
+
+  --chaos-success: #4ec38a;
+  --chaos-warning: #e2b341;
+  --chaos-danger:  #f45b69;
+
+  --chaos-shadow-1: 0 1px 0 rgba(255,255,255,0.04) inset, 0 0 0 1px rgba(255,255,255,0.04);
+  --chaos-shadow-2: 0 1px 2px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04);
+  --chaos-shadow-3: 0 4px 16px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.05);
+  --chaos-shadow-focus: 0 0 0 2px rgba(107, 136, 255, 0.35);
+
+  /* scrollbar */
+  --chaos-scroll-track: #111113;
+  --chaos-scroll-thumb: #2a2a31;
+  --chaos-scroll-thumb-hover: #3a3a44;
+}
+
+/* light palette - more restrained than typical */
+:root[data-color-mode="light"],
+html[data-color-mode="light"] {
+  --chaos-bg-0: #fafafa;
+  --chaos-bg-1: #ffffff;
+  --chaos-bg-2: #ffffff;
+  --chaos-bg-3: #f4f4f5;
+  --chaos-bg-4: #e8e8ec;
+
+  --chaos-border-1: rgba(10, 10, 10, 0.08);
+  --chaos-border-2: rgba(10, 10, 10, 0.12);
+  --chaos-border-3: rgba(10, 10, 10, 0.18);
+
+  --chaos-fg-0: #0a0a0a;
+  --chaos-fg-1: rgba(10, 10, 10, 0.86);
+  --chaos-fg-2: rgba(10, 10, 10, 0.62);
+  --chaos-fg-3: rgba(10, 10, 10, 0.42);
+  --chaos-fg-4: rgba(10, 10, 10, 0.28);
+
+  --chaos-accent: #3056d3;
+  --chaos-accent-soft: rgba(48, 86, 211, 0.10);
+  --chaos-accent-fg: #ffffff;
+  --chaos-accent-hover: #4170ee;
+
+  --chaos-shadow-2: 0 1px 2px rgba(0,0,0,0.06), 0 0 0 1px rgba(10,10,10,0.06);
+  --chaos-shadow-3: 0 4px 16px rgba(0,0,0,0.08), 0 0 0 1px rgba(10,10,10,0.06);
+
+  --chaos-scroll-track: #ffffff;
+  --chaos-scroll-thumb: #d4d4d8;
+  --chaos-scroll-thumb-hover: #a1a1aa;
+}
+
+/* ---------- 3. Hope UI token overrides (v3 scheme) ---------- */
+/* These are the most common variable names used by @hope-ui/solid.
+   If a variable doesn't exist, the override is a no-op (safe). */
+:root,
+html,
+body {
+  /* fonts */
+  --hope-fonts-body: var(--chaos-font-sans);
+  --hope-fonts-heading: var(--chaos-font-sans);
+  --hope-fonts-mono: var(--chaos-font-mono);
+
+  /* radius - small, hard */
+  --hope-radii-xs: 3px;
+  --hope-radii-sm: 4px;
+  --hope-radii-md: 6px;
+  --hope-radii-lg: 8px;
+  --hope-radii-xl: 10px;
+  --hope-radii-2xl: 12px;
+  --hope-radii-full: var(--chaos-r-full);
+
+  /* type sizes - tighten */
+  --hope-fontSizes-xs: var(--chaos-fs-xs);
+  --hope-fontSizes-sm: var(--chaos-fs-sm);
+  --hope-fontSizes-md: var(--chaos-fs-md);
+  --hope-fontSizes-base: var(--chaos-fs-base);
+  --hope-fontSizes-lg: var(--chaos-fs-lg);
+  --hope-fontSizes-xl: var(--chaos-fs-xl);
+  --hope-fontSizes-2xl: var(--chaos-fs-2xl);
+  --hope-fontSizes-3xl: var(--chaos-fs-3xl);
+}
+
+/* ---------- 4. apply globally to body ---------- */
+html, body {
+  background-color: var(--chaos-bg-0);
+  color: var(--chaos-fg-0);
+  font-family: var(--chaos-font-sans);
+  font-feature-settings: "ss01" on, "cv11" on, "calt" on;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+body {
+  font-size: var(--chaos-fs-base);
+  line-height: 1.55;
+  letter-spacing: -0.005em;
+}
+
+/* Chinese text - use better CJK font */
+:lang(zh), :lang(zh-CN) {
+  font-family: var(--chaos-font-cjk);
+}
+
+/* ---------- 5. scrollbar - thin, monochrome ---------- */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-corner { background: var(--chaos-scroll-track); }
+::-webkit-scrollbar-track { background: var(--chaos-scroll-track); }
+::-webkit-scrollbar-thumb {
+  background: var(--chaos-scroll-thumb);
+  border-radius: 999px;
+  border: 2px solid var(--chaos-scroll-track);
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--chaos-scroll-thumb-hover); background-clip: padding-box; border: 2px solid var(--chaos-scroll-track); }
+::-webkit-scrollbar-button { display: none; }
+
+/* Firefox */
+* { scrollbar-width: thin; scrollbar-color: var(--chaos-scroll-thumb) var(--chaos-scroll-track); }
+
+/* ---------- 6. selection ---------- */
+::selection {
+  background: var(--chaos-accent-soft);
+  color: var(--chaos-fg-0);
+}
+
+/* ---------- 7. links ---------- */
+a { color: var(--chaos-fg-0); text-decoration: none; }
+a:hover { color: var(--chaos-accent); }
+
+/* ---------- 8. headings - tight, geometric ---------- */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--chaos-font-sans);
+  color: var(--chaos-fg-0);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+h1 { font-size: var(--chaos-fs-3xl); }
+h2 { font-size: var(--chaos-fs-2xl); }
+h3 { font-size: var(--chaos-fs-xl); }
+
+/* ---------- 9. code ---------- */
+code, pre, kbd, samp {
+  font-family: var(--chaos-font-mono);
+  font-size: 0.92em;
+  font-variant-ligatures: contextual;
+}
+:not(pre) > code {
+  background: var(--chaos-bg-2);
+  border: 1px solid var(--chaos-border-1);
+  padding: 1px 6px;
+  border-radius: var(--chaos-r-sm);
+  color: var(--chaos-fg-1);
+}
+
+/* ---------- 10. focus ring - uniform across the app ---------- */
+*:focus { outline: none; }
+*:focus-visible {
+  outline: none;
+  box-shadow: var(--chaos-shadow-focus);
+  border-radius: var(--chaos-r-sm);
+}
+
+/* ---------- 11. Hope UI / common component overrides ---------- */
+/* Buttons */
+button, [role="button"] {
+  font-family: var(--chaos-font-sans);
+  letter-spacing: -0.005em;
+  font-weight: 500;
+}
+
+/* Inputs */
+input, textarea, select {
+  font-family: var(--chaos-font-sans);
+  font-size: var(--chaos-fs-base);
+  background: var(--chaos-bg-1);
+  border: 1px solid var(--chaos-border-2);
+  color: var(--chaos-fg-0);
+  border-radius: var(--chaos-r-md);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+input:hover, textarea:hover, select:hover {
+  border-color: var(--chaos-border-3);
+}
+input:focus, textarea:focus, select:focus {
+  border-color: var(--chaos-accent);
+}
+
+/* Tables */
+table {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+thead th {
+  font-size: var(--chaos-fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--chaos-fg-3);
+  font-weight: 500;
+  border-bottom: 1px solid var(--chaos-border-2);
+  padding: var(--chaos-s-2) var(--chaos-s-3);
+  text-align: left;
+  background: var(--chaos-bg-1);
+}
+tbody td {
+  padding: var(--chaos-s-3);
+  border-bottom: 1px solid var(--chaos-border-1);
+  color: var(--chaos-fg-1);
+}
+tbody tr:hover td { background: var(--chaos-bg-1); }
+
+/* ---------- 12. dividers ---------- */
+hr { border: 0; border-top: 1px solid var(--chaos-border-1); margin: var(--chaos-s-6) 0; }
+
+/* ---------- 13. kick Hope UI common classes if present ---------- */
+.hope-ui-light, .hope-ui-dark {
+  font-family: var(--chaos-font-sans) !important;
+  color-scheme: dark;
+}
+[data-color-mode="light"] .hope-ui-light,
+[data-color-mode="light"] .hope-ui-dark,
+:root[data-color-mode="light"] {
+  color-scheme: light;
+}
+
+/* markdown body - inherited from openlist's existing index.css, just adjust colors */
+.markdown-body { color: var(--chaos-fg-1); }
+.markdown-body a { color: var(--chaos-accent); border-bottom: 1px solid transparent; transition: border-color 0.15s; }
+.markdown-body a:hover { border-bottom-color: var(--chaos-accent); }
+.markdown-body h1, .markdown-body h2 { border-bottom-color: var(--chaos-border-1) !important; }
+.markdown-body code { color: var(--chaos-fg-0) !important; background: var(--chaos-bg-2) !important; }
+.markdown-body pre { background: var(--chaos-bg-1) !important; border: 1px solid var(--chaos-border-1); border-radius: var(--chaos-r-md); }
+.markdown-body blockquote { color: var(--chaos-fg-2) !important; border-left-color: var(--chaos-border-2) !important; }
+.markdown-body table td, .markdown-body table th { border-color: var(--chaos-border-1) !important; }
+.markdown-body table tr { background: transparent !important; border-top-color: var(--chaos-border-1) !important; }
+.markdown-body table tr:nth-child(2n) { background: var(--chaos-bg-1) !important; }
+.markdown-body hr { background-color: var(--chaos-border-1) !important; }
+.markdown-body kbd { color: var(--chaos-fg-0) !important; background: var(--chaos-bg-2) !important; border-color: var(--chaos-border-2) !important; }
+
+/* highlight.js - dark monochrome */
+.hljs { background: var(--chaos-bg-1) !important; color: var(--chaos-fg-1) !important; }
+.hljs-comment, .hljs-quote { color: var(--chaos-fg-3) !important; }
+.hljs-keyword, .hljs-selector-tag, .hljs-subst { color: var(--chaos-fg-0) !important; font-weight: 500 !important; }
+.hljs-literal, .hljs-number, .hljs-tag .hljs-attr, .hljs-template-variable, .hljs-variable { color: #b48ead !important; }
+.hljs-doctag, .hljs-string { color: #c3e88d !important; }
+.hljs-section, .hljs-selector-id, .hljs-title { color: #82aaff !important; font-weight: 500 !important; }
+.hljs-class .hljs-title, .hljs-type { color: #ffcb6b !important; }
+.hljs-attribute, .hljs-name, .hljs-tag { color: var(--chaos-fg-1) !important; }
+.hljs-link, .hljs-regexp { color: #c3e88d !important; }
+.hljs-built_in, .hljs-builtin-name { color: #82aaff !important; }
+.hljs-meta { color: var(--chaos-fg-3) !important; }
+
+/* ---------- 14. solid-contextmenu - restyle to match theme ---------- */
+.solid-contextmenu {
+  background-color: var(--chaos-bg-2) !important;
+  border: 1px solid var(--chaos-border-2) !important;
+  border-radius: var(--chaos-r-md) !important;
+  box-shadow: var(--chaos-shadow-3) !important;
+  padding: 4px !important;
+  min-width: 180px !important;
+}
+.solid-contextmenu__item__content {
+  color: var(--chaos-fg-1) !important;
+  padding: 6px 10px !important;
+  border-radius: var(--chaos-r-sm) !important;
+  font-size: var(--chaos-fs-md) !important;
+  font-family: var(--chaos-font-sans) !important;
+}
+.solid-contextmenu__item:not(.solid-contextmenu__item--disabled):hover > .solid-contextmenu__item__content {
+  background-color: var(--chaos-bg-3) !important;
+  color: var(--chaos-fg-0) !important;
+}
+.solid-contextmenu__separator {
+  background-color: var(--chaos-border-1) !important;
+  height: 1px !important;
+  margin: 4px 6px !important;
+}
+.solid-contextmenu__theme--light .solid-contextmenu__item__content { color: var(--chaos-fg-1) !important; }
+.solid-contextmenu__theme--dark, .solid-contextmenu__theme--dark .solid-contextmenu__submenu { background-color: var(--chaos-bg-2) !important; }
+.solid-contextmenu__theme--dark .solid-contextmenu__item__content { color: var(--chaos-fg-1) !important; }
+
+/* ---------- 15. image / media (avoid AI-typical heavy rounded corners) ---------- */
+img, svg, video { display: inline-block; max-width: 100%; }
+
+/* ---------- 16. scroll / drag affordances ---------- */
+::placeholder { color: var(--chaos-fg-3); }
+
+/* ---------- 17. monospaced numeric / file-size alignment ---------- */
+.mono, [data-mono] { font-family: var(--chaos-font-mono); font-variant-numeric: tabular-nums; }
+
+/* ---------- 18. brutalist utility: kill default radii on first/last children of a card ---------- */
+.chaos-card, .chaos-card > *:first-child { border-top-left-radius: var(--chaos-r-md); border-top-right-radius: var(--chaos-r-md); }
+.chaos-card > *:last-child { border-bottom-left-radius: var(--chaos-r-md); border-bottom-right-radius: var(--chaos-r-md); }
+
+/* ---------- 19. smooth dark/light transition ---------- */
+html { color-scheme: dark; }
+html, body, * { transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease; }
+
+/* Reduce motion when requested */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

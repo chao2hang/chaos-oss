@@ -13,7 +13,57 @@ import (
 
 var (
 	AccessToken = "https://open-api.123pan.com/api/v1/access_token"
+	// OAuthTokenURL is the open-platform OAuth token endpoint. It accepts
+	// the standard authorization_code / refresh_token grants — unlike the
+	// rest of the API it reads params from a form body, not JSON.
+	OAuthTokenURL = "https://open-api.123pan.com/api/v1/oauth2/access_token"
 )
+
+// Public open-platform app credentials (Filmly Android client). Used to
+// refresh tokens issued through the OAuth authorization flow when the
+// user does not have their own developer client_id/secret.
+const (
+	oauthClientID     = "uch86homnvtpukbenxv06whun7oayymz"
+	oauthClientSecret = "qxlth6oludklrutxxz8h4dh6jgicpe28"
+	oauthRedirectURI  = "https://api.filmly.netease.com/a/v1/123pan/callback"
+)
+
+// OAuthTokenResp models the flat OAuth success response
+// ({"token_type","access_token","refresh_token","expires_in"} at the top
+// level per the API doc §2.3) and the OAuth-style error body. The nested
+// envelope form is kept as a fallback.
+type OAuthTokenResp struct {
+	TokenType    string `json:"token_type"`
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	ExpiresIn    int64  `json:"expires_in"`
+
+	Error            string `json:"error"`
+	ErrorDescription string `json:"error_description"`
+
+	Data *OAuthTokenData `json:"data"`
+}
+
+// OAuthTokenData mirrors OAuthTokenResp for the nested envelope form.
+type OAuthTokenData struct {
+	TokenType    string `json:"token_type"`
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	ExpiresIn    int64  `json:"expires_in"`
+}
+
+// Effective returns whichever form carried a usable access token.
+func (r *OAuthTokenResp) Effective() *OAuthTokenData {
+	if r.Data != nil && r.Data.AccessToken != "" {
+		return r.Data
+	}
+	return &OAuthTokenData{
+		TokenType:    r.TokenType,
+		AccessToken:  r.AccessToken,
+		RefreshToken: r.RefreshToken,
+		ExpiresIn:    r.ExpiresIn,
+	}
+}
 
 func expiresInToExpiredAt(expiresIn int64) (time.Time, error) {
 	if expiresIn <= 0 {
@@ -48,6 +98,48 @@ func (d *Open123) getAccessToken(forceRefresh bool) (string, error) {
 }
 
 func (d *Open123) flushAccessToken() error {
+	// OAuth refresh-token grant against the official endpoint. When the
+	// stored refresh token was issued through the open-platform OAuth
+	// flow (e.g. via the web UI's OAuth helper), this renews it directly
+	// with 123 instead of relying on a third-party renewal service.
+	// Failure falls through to the legacy paths below.
+	if d.RefreshToken != "" {
+		var resp OAuthTokenResp
+		_, err := base.RestyClient.R().
+			SetHeader("User-Agent", "Filmly/2.1.0-20100").
+			SetFormData(map[string]string{
+				"client_id":     oauthClientID,
+				"client_secret": oauthClientSecret,
+				"grant_type":    "refresh_token",
+				"refresh_token": d.RefreshToken,
+				"redirect_uri":  oauthRedirectURI,
+			}).
+			SetResult(&resp).
+			Post(OAuthTokenURL)
+		if err == nil {
+			if data := resp.Effective(); data.AccessToken != "" {
+				expiresIn := data.ExpiresIn
+				if expiresIn <= 0 {
+					// The endpoint sometimes reports 0; assume a conservative
+					// 25-day lifetime so the cached token is used meanwhile.
+					expiresIn = 25 * 24 * 3600
+				}
+				expiredAt, err := expiresInToExpiredAt(expiresIn)
+				if err == nil {
+					d.AccessToken = data.AccessToken
+					if data.RefreshToken != "" {
+						d.RefreshToken = data.RefreshToken
+					}
+					d.tm.expiredAt = expiredAt
+					op.MustSaveDriverStorage(d)
+					d.tm.blockRefresh = false
+					return nil
+				}
+			}
+		}
+		// Fall through to the legacy renewal paths.
+	}
+
 	// Official app renewapi response contains access_token, refresh_token and expires_in.
 	if d.UseOnlineAPI && d.RefreshToken != "" && len(d.APIAddress) > 0 {
 		var resp RefreshTokenResp

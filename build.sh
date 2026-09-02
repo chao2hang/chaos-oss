@@ -97,9 +97,12 @@ AssertStaticBinary() {
 }
 
 FetchWebRolling() {
+  if BuildWebLocal; then
+    return
+  fi
   pre_release_json=$(eval "curl -fsSL --max-time 2 $githubAuthArgs -H \"Accept: application/vnd.github.v3+json\" \"https://api.github.com/repos/$frontendRepo/releases/tags/rolling\"")
   pre_release_assets=$(echo "$pre_release_json" | jq -r '.assets[].browser_download_url')
-  
+
   # There is no lite for rolling
   pre_release_tar_url=$(echo "$pre_release_assets" | grep "openlist-frontend-dist" | grep -v "lite" | grep "\.tar\.gz$")
 
@@ -107,22 +110,69 @@ FetchWebRolling() {
   rm -rf public/dist && mkdir -p public/dist
   tar -zxvf dist.tar.gz -C public/dist
   rm -rf dist.tar.gz
+  ApplyChaosTheme
 }
 
 FetchWebRelease() {
+  if BuildWebLocal; then
+    return
+  fi
   release_json=$(eval "curl -fsSL --max-time 2 $githubAuthArgs -H \"Accept: application/vnd.github.v3+json\" \"https://api.github.com/repos/$frontendRepo/releases/latest\"")
   release_assets=$(echo "$release_json" | jq -r '.assets[].browser_download_url')
-  
+
   if [ "$useLite" = true ]; then
     release_tar_url=$(echo "$release_assets" | grep "openlist-frontend-dist-lite" | grep "\.tar\.gz$")
   else
     release_tar_url=$(echo "$release_assets" | grep "openlist-frontend-dist" | grep -v "lite" | grep "\.tar\.gz$")
   fi
-  
+
   curl -fsSL "$release_tar_url" -o dist.tar.gz
   rm -rf public/dist && mkdir -p public/dist
   tar -zxvf dist.tar.gz -C public/dist
   rm -rf dist.tar.gz
+  ApplyChaosTheme
+}
+
+# BuildWebLocal builds the in-repo React frontend (frontend/) into
+# public/dist. Returns 0 (success) when the local frontend is usable,
+# 1 when we should fall back to downloading the upstream dist.
+BuildWebLocal() {
+  if [ ! -f frontend/package.json ]; then
+    return 1
+  fi
+  echo "building local frontend (frontend/)..."
+  # make sure a package manager exists (runners/containers may only
+  # ship node) — corepack ships with node and can activate pnpm
+  if ! command -v pnpm >/dev/null 2>&1; then
+    corepack enable pnpm 2>/dev/null || npm install -g pnpm || return 1
+  fi
+  (
+    cd frontend || exit 1
+    if [ ! -d node_modules ]; then
+      pnpm install --frozen-lockfile || pnpm install || exit 1
+    fi
+    pnpm build:fast || exit 1
+  ) || {
+    echo "warning: local frontend build failed, falling back to upstream dist" >&2
+    return 1
+  }
+  # Vite already wrote into ../public/dist (see frontend/vite.config.ts).
+  return 0
+}
+
+
+# Apply the chaos-oss premium theme on top of the freshly extracted dist.
+# Idempotent: safe to run multiple times. Skips gracefully if the theme
+# assets are missing (e.g. when building from a source tree that has not
+# yet been themed).
+ApplyChaosTheme() {
+  local themeScript="public/theme/install.sh"
+  if [ -f "$themeScript" ]; then
+    echo "applying chaos-oss theme..."
+    bash "$themeScript"
+  else
+    echo "warning: $themeScript not found, skipping theme apply" >&2
+  fi
 }
 
 BuildWinArm64() {

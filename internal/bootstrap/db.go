@@ -3,6 +3,9 @@ package bootstrap
 import (
 	"fmt"
 	stdlog "log"
+	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -17,7 +20,49 @@ import (
 	"gorm.io/gorm/schema"
 )
 
+// backupSQLite copies the database file before it gets opened, keeping
+// the most recent N startup snapshots under data/backup/. Losing the
+// settings/storages/shares to a corrupt WAL or a bad upgrade is the one
+// unrecoverable failure mode of a self-hosted box, so pay a few MB.
+func backupSQLite() {
+	if flags.Dev {
+		return
+	}
+	dbFile := conf.Conf.Database.DBFile
+	if conf.Conf.Database.Type != "sqlite3" || dbFile == "" {
+		return
+	}
+	if _, err := os.Stat(dbFile); err != nil {
+		return // first boot — nothing to back up
+	}
+	backupDir := filepath.Join(filepath.Dir(dbFile), "backup")
+	if err := os.MkdirAll(backupDir, 0o700); err != nil {
+		log.Warnf("backup: failed to create dir: %v", err)
+		return
+	}
+	dst := filepath.Join(backupDir, fmt.Sprintf("data-%s.db", time.Now().Format("20060102-150405")))
+	data, err := os.ReadFile(dbFile)
+	if err != nil {
+		log.Warnf("backup: failed to read db: %v", err)
+		return
+	}
+	if err := os.WriteFile(dst, data, 0o600); err != nil {
+		log.Warnf("backup: failed to write: %v", err)
+		return
+	}
+	// prune: keep the newest 7 snapshots
+	entries, _ := filepath.Glob(filepath.Join(backupDir, "data-*.db"))
+	if len(entries) > 7 {
+		sort.Strings(entries)
+		for _, old := range entries[:len(entries)-7] {
+			_ = os.Remove(old)
+		}
+	}
+	log.Infof("backup: database snapshot saved to %s", dst)
+}
+
 func InitDB() {
+	backupSQLite()
 	logLevel := logger.Silent
 	if flags.Debug || flags.Dev {
 		logLevel = logger.Info

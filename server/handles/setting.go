@@ -53,6 +53,21 @@ func SaveSettings(c *gin.Context) {
 		common.ErrorResp(c, err, 400)
 		return
 	}
+	// Clients may send partial items ({key, value} only). gorm's Save writes
+	// every column, so without merging, the stored group/flag/type/options/
+	// help/index would be reset to zero values (items "disappear" from
+	// their settings group). Restore the stored metadata before saving.
+	for i := range req {
+		stored, err := op.GetSettingItemByKey(req[i].Key)
+		if err == nil && stored != nil {
+			req[i].Group = stored.Group
+			req[i].Flag = stored.Flag
+			req[i].Type = stored.Type
+			req[i].Options = stored.Options
+			req[i].Help = stored.Help
+			req[i].Index = stored.Index
+		}
+	}
 	if err := op.SaveSettingItems(req); err != nil {
 		common.ErrorResp(c, err, 500)
 	} else {

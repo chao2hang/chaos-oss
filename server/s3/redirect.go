@@ -37,6 +37,10 @@ func redirectHandler(next http.Handler, authPairs map[string]string) http.Handle
 	})
 }
 
+// directObjectURL returns a 302 redirect target for a GET, if any of
+// the bucket's underlying storage paths can hand back a direct link to
+// the object. We try the lowest-latency path first (per the probe cache)
+// and fall through to the rest until one works.
 func directObjectURL(r *http.Request, authPairs map[string]string) (string, bool) {
 	if r.Method != http.MethodGet {
 		return "", false
@@ -52,28 +56,40 @@ func directObjectURL(r *http.Request, authPairs map[string]string) (string, bool
 	if err != nil {
 		return "", false
 	}
-	reqPath := path.Join(bucket.Path, objectName)
-	meta, _ := op.GetNearestMeta(reqPath)
-	ctx := context.WithValue(r.Context(), conf.MetaKey, meta)
-	storage, err := fs.GetStorage(reqPath, &fs.GetStoragesArgs{})
-	if err != nil || common.ShouldProxy(storage, path.Base(reqPath)) {
-		return "", false
+	paths := rankedPaths(bucket)
+	for _, p := range paths {
+		reqPath := path.Join(p, objectName)
+		meta, _ := op.GetNearestMeta(reqPath)
+		ctx := context.WithValue(r.Context(), conf.MetaKey, meta)
+		storage, err := fs.GetStorage(reqPath, &fs.GetStoragesArgs{})
+		if err != nil || common.ShouldProxy(storage, path.Base(reqPath)) {
+			continue
+		}
+		link, file, err := fs.Link(ctx, reqPath, model.LinkArgs{
+			IP:       utils.ClientIP(r),
+			Header:   r.Header,
+			Redirect: true,
+		})
+		if err != nil {
+			continue
+		}
+		if file == nil || file.IsDir() || link.URL == "" || link.RangeReader != nil {
+			_ = link.Close()
+			continue
+		}
+		_ = link.Close()
+		return link.URL, true
 	}
-	link, file, err := fs.Link(ctx, reqPath, model.LinkArgs{
-		IP:       utils.ClientIP(r),
-		Header:   r.Header,
-		Redirect: true,
-	})
-	if err != nil {
-		return "", false
-	}
-	defer link.Close()
-	if file == nil || file.IsDir() || link.URL == "" || link.RangeReader != nil {
-		return "", false
-	}
-	return link.URL, true
+	return "", false
 }
 
+// directUploadURL returns a 307 redirect target for a PUT if the
+// storage backing the bucket can accept direct uploads. For multi-path
+// buckets we still try to return a direct URL (one path is enough for
+// the client to land the data; replication to the other paths happens
+// in the background once chaos-oss sees the new file via the storage's
+// own post-upload hook). If no path supports direct upload we return
+// false so the request falls through to the streaming upload path.
 func directUploadURL(r *http.Request, authPairs map[string]string) (string, bool) {
 	if r.Method != http.MethodPut || r.ContentLength < 0 {
 		return "", false
@@ -93,28 +109,31 @@ func directUploadURL(r *http.Request, authPairs map[string]string) (string, bool
 	if err != nil {
 		return "", false
 	}
-	reqPath := path.Join(bucket.Path, objectName)
-	storage, dstDirActualPath, err := op.GetStorageAndActualPath(path.Dir(reqPath))
-	if err != nil || storage.Config().NoUpload {
-		return "", false
+	for _, p := range rankedPaths(bucket) {
+		reqPath := path.Join(p, objectName)
+		storage, dstDirActualPath, err := op.GetStorageAndActualPath(path.Dir(reqPath))
+		if err != nil || storage.Config().NoUpload {
+			continue
+		}
+		info, err := op.GetDirectUploadInfo(r.Context(), "HttpDirect", storage, dstDirActualPath, path.Base(reqPath), r.ContentLength, true)
+		if err != nil {
+			continue
+		}
+		httpInfo, ok := asHTTPDirectUploadInfo(info)
+		if !ok {
+			continue
+		}
+		method := httpInfo.Method
+		if method == "" {
+			method = http.MethodPut
+		}
+		if !strings.EqualFold(method, http.MethodPut) || httpInfo.UploadURL == "" ||
+			httpInfo.ChunkSize > 0 || len(httpInfo.Headers) > 0 {
+			continue
+		}
+		return httpInfo.UploadURL, true
 	}
-	info, err := op.GetDirectUploadInfo(r.Context(), "HttpDirect", storage, dstDirActualPath, path.Base(reqPath), r.ContentLength, true)
-	if err != nil {
-		return "", false
-	}
-	httpInfo, ok := asHTTPDirectUploadInfo(info)
-	if !ok {
-		return "", false
-	}
-	method := httpInfo.Method
-	if method == "" {
-		method = http.MethodPut
-	}
-	if !strings.EqualFold(method, http.MethodPut) || httpInfo.UploadURL == "" ||
-		httpInfo.ChunkSize > 0 || len(httpInfo.Headers) > 0 {
-		return "", false
-	}
-	return httpInfo.UploadURL, true
+	return "", false
 }
 
 func asHTTPDirectUploadInfo(info any) (*model.HttpDirectUploadInfo, bool) {

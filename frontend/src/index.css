@@ -1,0 +1,289 @@
+/*
+ * chaos-oss frontend styles
+ *
+ * Wiring:
+ *  1. Tailwind 4 base.
+ *  2. @source scans chaos-ui's dist JS so the utility classes its
+ *     components reference actually get generated (the published
+ *     styles.css contains tokens only, zero compiled utilities).
+ *  3. chaos-ui's self-contained styles (tokens, animations, base).
+ *  4. chaos-oss theme: map the existing monochrome palette
+ *     (near-black bg, hairline borders, single blue accent, 4-6px
+ *     radius) onto chaos-ui's shadcn-style CSS variables. This keeps
+ *     the component library but makes it look like chaos-oss.
+ */
+@import 'tailwindcss';
+@source '../node_modules/@chaos_team/chaos-ui/dist';
+
+/* ------------------------------------------------------------------
+ * chaos-oss palette → chaos-ui semantic tokens
+ *
+ * Values mirror public/theme/assets/chaos-theme.css:
+ *   bg-0 #0a0a0a  bg-1 #111113  bg-2 #16161a  bg-3 #1c1c21  bg-4 #23232a
+ *   fg-0 #fafafa  fg-2 rgba(250,250,250,.62)
+ *   border-1 rgba(255,255,255,.08)  border-2 .12  border-3 .18
+ *   accent #6b88ff  danger #f45b69  success #4ec38a  warning #e2b341
+ * ------------------------------------------------------------------ */
+:root {
+  /* light palette — the app boots with class="dark" on <html> unless the
+   * user picked light; both themes map onto the same semantic tokens */
+  --background: #f7f7f8;
+  --foreground: #17171a;
+  --card: #ffffff;
+  --card-foreground: #17171a;
+  --popover: #ffffff;
+  --popover-foreground: #17171a;
+  --primary: #5266e0;
+  --primary-foreground: #ffffff;
+  --secondary: #f0f0f2;
+  --secondary-foreground: #17171a;
+  --muted: #ececef;
+  --muted-foreground: rgba(23, 23, 26, 0.62);
+  --accent: #ececef;
+  --accent-foreground: #17171a;
+  --destructive: #e04351;
+  --destructive-foreground: #ffffff;
+  --border: rgba(0, 0, 0, 0.09);
+  --input: rgba(0, 0, 0, 0.14);
+  --ring: #5266e0;
+  --radius: 4px;
+  --font-sans: 'InterVariable', -apple-system, BlinkMacSystemFont,
+    'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif,
+    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas,
+    'Liberation Mono', 'Courier New', monospace;
+}
+
+/* Dark theme — the original chaos-oss monochrome palette. */
+.dark {
+  --background: #0a0a0a;
+  --foreground: #fafafa;
+  --card: #111113;
+  --card-foreground: #fafafa;
+  --popover: #16161a;
+  --popover-foreground: #fafafa;
+  --primary: #6b88ff;
+  --primary-foreground: #fafafa;
+  --secondary: #16161a;
+  --secondary-foreground: #fafafa;
+  --muted: #1c1c21;
+  --muted-foreground: rgba(250, 250, 250, 0.62);
+  --accent: #1c1c21;
+  --accent-foreground: #fafafa;
+  --destructive: #f45b69;
+  --destructive-foreground: #fafafa;
+  --border: rgba(255, 255, 255, 0.08);
+  --input: rgba(255, 255, 255, 0.12);
+  --ring: #6b88ff;
+  --radius: 4px;
+}
+
+/* chaos-ui exposes @theme-inline mapping (shadcn convention) — wire the
+ * semantic vars so `bg-background`, `text-foreground`, `border-border`
+ * etc. used by the components resolve to our palette. */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 0px);
+  --radius-md: calc(var(--radius) + 2px);
+  --radius-lg: calc(var(--radius) + 4px);
+  --radius-xl: calc(var(--radius) + 8px);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+}
+
+/* self-hosted fonts (copied from chaos-theme assets) */
+@font-face {
+  font-family: 'InterVariable';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/InterVariable.woff2') format('woff2-variations');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/JetBrainsMono-Regular.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/JetBrainsMono-Medium.woff2') format('woff2');
+}
+
+html,
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* iOS Safari zooms the page when focusing inputs rendered below 16px;
+ * force form controls to 16px on phones to keep the viewport stable. */
+@media (max-width: 768px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+* {
+  border-color: var(--border);
+}
+
+::selection {
+  background: rgba(107, 136, 255, 0.12);
+  color: var(--foreground);
+}
+
+/* ------------------------------------------------------------------
+ * chaos-ui Command (type-ahead) alignment with the form look.
+ * The library forces rounded-xl! / h-8! on its slots. Those utilities
+ * are generated by OUR Tailwind build inside @layer utilities — and for
+ * !important declarations layered rules beat unlayered ones, so these
+ * overrides must live in the SAME layer (appended after Tailwind's
+ * generated utilities → later source order wins the tie).
+ * ------------------------------------------------------------------ */
+@layer utilities {
+  [data-slot='command'] {
+    border-radius: calc(var(--radius) + 2px) !important; /* 6px, not 12px */
+    padding: 0 !important; /* the input wrapper provides its own padding */
+    height: auto !important; /* undo size-full's 100% height */
+  }
+
+  [data-slot='command-input-wrapper'] {
+    padding: 0 !important; /* avoid double inset inside the root */
+  }
+
+  /* The embedded input-group should match plain form inputs */
+  [data-slot='command-input-wrapper'] > [data-slot='input-group'] {
+    border-radius: calc(var(--radius) + 2px) !important;
+    border-color: var(--input) !important;
+    background: transparent !important;
+  }
+
+  [data-slot='command-input'] {
+    font-size: 14px !important; /* base size like other inputs */
+    font-family: var(--font-mono) !important;
+  }
+
+  /* keep iOS from zooming the page when focusing the type-ahead on phones */
+  @media (max-width: 768px) {
+    [data-slot='command-input'] {
+      font-size: 16px !important;
+    }
+  }
+
+  [data-slot='command-item'] {
+    border-radius: var(--radius) !important; /* 4px, not dialog rounded-lg */
+    padding-top: 0.375rem !important;
+    padding-bottom: 0.375rem !important;
+    font-size: 14px !important;
+    font-family: var(--font-mono) !important;
+  }
+
+  [data-slot='command-list'] {
+    border-top: 1px solid var(--border);
+  }
+}
+
+/* thin scrollbars, matching chaos-theme.css */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* markdown bodies (README / Header rendered from meta) */
+.md-body {
+  font-size: 0.875rem;
+  line-height: 1.7;
+  color: rgba(250, 250, 250, 0.85);
+}
+.md-body h1,
+.md-body h2,
+.md-body h3,
+.md-body h4 {
+  color: #fafafa;
+  font-weight: 600;
+  margin: 1.2em 0 0.5em;
+  line-height: 1.3;
+}
+.md-body h1 { font-size: 1.25rem; }
+.md-body h2 { font-size: 1.125rem; }
+.md-body h3 { font-size: 1rem; }
+.md-body h4 { font-size: 0.875rem; }
+.md-body p { margin: 0.6em 0; }
+.md-body ul,
+.md-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+.md-body ul { list-style: disc; }
+.md-body ol { list-style: decimal; }
+.md-body li { margin: 0.25em 0; }
+.md-body a { color: #6b88ff; text-decoration: underline; text-underline-offset: 2px; }
+.md-body code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8em;
+  background: #1c1c21;
+  border: 1px solid #23232a;
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+}
+.md-body pre {
+  background: #101014;
+  border: 1px solid #23232a;
+  border-radius: 8px;
+  padding: 0.75em 1em;
+  overflow-x: auto;
+  margin: 0.8em 0;
+}
+.md-body pre code { background: transparent; border: none; padding: 0; }
+.md-body blockquote {
+  border-left: 3px solid #6b88ff;
+  padding-left: 0.9em;
+  margin: 0.8em 0;
+  color: rgba(250, 250, 250, 0.6);
+}
+.md-body table { border-collapse: collapse; margin: 0.8em 0; width: 100%; }
+.md-body th,
+.md-body td { border: 1px solid #23232a; padding: 0.35em 0.7em; text-align: left; }
+.md-body th { background: #141418; color: #fafafa; }
+.md-body img { max-width: 100%; border-radius: 6px; }
+.md-body hr { border: none; border-top: 1px solid #23232a; margin: 1.2em 0; }

@@ -162,6 +162,11 @@ func ManifestJSON(c *gin.Context) {
 				Sizes: "512x512",
 				Type:  "image/png",
 			},
+			{
+				Src:   "/logo/logo-192.png",
+				Sizes: "192x192",
+				Type:  "image/png",
+			},
 		},
 	}
 
@@ -180,7 +185,7 @@ func Static(r *gin.RouterGroup, noRoute func(handlers ...gin.HandlerFunc)) {
 	siteConfig := getSiteConfig()
 	initStatic()
 	initIndex(siteConfig)
-	folders := []string{"assets", "images", "streamer", "static"}
+	folders := []string{"assets", "images", "streamer", "static", "chaos-assets", "fonts", "logo"}
 
 	if conf.Conf.Cdn == "" {
 		utils.Log.Debug("Setting up static file serving...")
@@ -210,12 +215,33 @@ func Static(r *gin.RouterGroup, noRoute func(handlers ...gin.HandlerFunc)) {
 	}
 
 	utils.Log.Debug("Setting up catch-all route...")
+	// favicon.ico — browsers request this path by default; serve it from the
+	// dist root and fall back to the svg logo when the file is missing.
+	r.GET("/favicon.ico", func(c *gin.Context) {
+		f, err := static.Open("favicon.ico")
+		if err != nil {
+			c.Redirect(http.StatusFound, "/logo/logo.svg")
+			return
+		}
+		defer func() {
+			_ = f.Close()
+		}()
+		c.Header("Content-Type", "image/x-icon")
+		c.Header("Cache-Control", "public, max-age=86400")
+		_, _ = io.Copy(c.Writer, f)
+	})
+
 	noRoute(func(c *gin.Context) {
 		if c.Request.Method != "GET" && c.Request.Method != "POST" {
 			c.Status(405)
 			return
 		}
 		c.Header("Content-Type", "text/html")
+		// The SPA shell must always be revalidated: hashed asset URLs are
+		// immutable and cached forever, but the shell references them by
+		// name — a cached shell would keep serving a stale bundle after a
+		// deploy. no-cache allows storage but forces revalidation.
+		c.Header("Cache-Control", "no-cache")
 		c.Status(200)
 		if strings.HasPrefix(c.Request.URL.Path, "/@manage") {
 			_, _ = c.Writer.WriteString(conf.ManageHtml)

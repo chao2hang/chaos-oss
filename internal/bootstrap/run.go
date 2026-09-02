@@ -18,6 +18,8 @@ import (
 	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
 	"github.com/OpenListTeam/OpenList/v4/server"
 	"github.com/OpenListTeam/OpenList/v4/server/middlewares"
+	"github.com/OpenListTeam/OpenList/v4/internal/op"
+	s3server "github.com/OpenListTeam/OpenList/v4/server/s3"
 	"github.com/OpenListTeam/sftpd-openlist"
 	ftpserver "github.com/fclairamb/ftpserverlib"
 	"github.com/gin-gonic/gin"
@@ -37,6 +39,14 @@ func Init() {
 	InitStreamLimit()
 	InitIndex()
 	InitUpgradePatch()
+	InitS3Services()
+}
+
+// InitS3Services starts the S3 gateway key store (multi-access-key
+// auth with per-key permissions) and the async audit writer.
+func InitS3Services() {
+	s3server.InitS3Keys(make(chan struct{}))
+	op.StartS3AuditWorker(make(chan struct{}))
 }
 
 func Release() {

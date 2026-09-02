@@ -3,8 +3,12 @@ ARG BASE_IMAGE_TAG=base
 
 FROM alpine:edge AS builder
 LABEL stage=go-builder
+# override with --build-arg GOPROXY=... when building from networks that
+# cannot reach proxy.golang.org (e.g. CN)
+ARG GOPROXY=https://proxy.golang.org,direct
+ENV GOPROXY=${GOPROXY}
 WORKDIR /app/
-RUN apk add --no-cache bash curl jq gcc git go musl-dev
+RUN apk add --no-cache bash curl jq gcc git go musl-dev nodejs
 COPY go.mod go.sum ./
 RUN go mod download
 COPY ./ ./
