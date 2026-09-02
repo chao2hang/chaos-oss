@@ -319,15 +319,12 @@ BuildDockerMultiplatform() {
 
 BuildRelease() {
   mkdir -p "build"
-  BuildWinArm64 ./build/"$appName"-windows-arm64.exe
-  BuildWin7 ./build/"$appName"-windows7
-  xgo -out "$appName" -ldflags="$ldflags" -tags=jsoniter .
-  # why? Because some target platforms seem to have issues with upx compression
-  # upx -9 ./"$appName"-linux-amd64
-  # cp ./"$appName"-windows-amd64.exe ./"$appName"-windows-amd64-upx.exe
-  # upx -9 ./"$appName"-windows-amd64-upx.exe
+  # chaos-oss: Linux-only release builds (windows/darwin/android/freebsd
+  # were dropped to keep the asset list small)
+  xgo -targets=linux/amd64,linux/arm64,linux/386,linux/riscv64,linux/ppc64le \
+    -out "$appName" -ldflags="$ldflags" -tags=jsoniter .
   mv "$appName"-* build
-  
+
   # Build LoongArch with glibc (both old world abi1.0 and new world abi2.0)
   # Separate from musl builds to avoid cache conflicts
   BuildLoongGLIBC ./build/$appName-linux-loong64-abi1.0 abi1.0

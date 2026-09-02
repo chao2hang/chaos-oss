@@ -83,26 +83,6 @@ jobs:
             flags: "-ldflags=-linkmode external -extldflags '-static -fpic'"
             goflags: ""
             musl_static: "true"
-          - target: "windows-arm64" #win-arm64
-            hash: "md5-windows-arm64"
-            flags: ""
-            goflags: ""
-            musl_static: "false"
-          - target: "windows7-*" #win7
-            hash: "md5-windows7"
-            flags: ""
-            goflags: "-tags=sqlite_cgo_compat"
-            musl_static: "false"
-          - target: "android-*" #android
-            hash: "md5-android"
-            flags: ""
-            goflags: ""
-            musl_static: "false"
-          - target: "freebsd-*" #freebsd
-            hash: "md5-freebsd"
-            flags: ""
-            goflags: ""
-            musl_static: "false"
 
     name: Beta Release
     runs-on: ubuntu-latest
