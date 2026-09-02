@@ -504,6 +504,50 @@ export const EN: Record<string, string> = {
   '扫描中… 已扫描 {n} 项': 'Scanning… {n} objects',
   '共 {n} 项': '{n} objects',
 
+  // ---- storage (channel) export / import ----
+  '导出': 'Export',
+  '导入': 'Import',
+  '导出 ({n})': 'Export ({n})',
+  '导出全部渠道': 'Export all channels',
+  '导出选中的 {n} 个渠道': 'Export the {n} selected channels',
+  '已导出 {n} 个渠道，文件包含凭据，请妥善保管':
+    'Exported {n} channels — the file contains credentials, keep it safe',
+  '导入渠道': 'Import channels',
+  '从导出的 JSON 文件恢复渠道配置':
+    'Restore channel configurations from an exported JSON file',
+  '选择导出的 JSON 文件': 'Choose an exported JSON file',
+  '点击选择文件，文件中包含渠道的完整配置':
+    'Click to choose a file — it contains the full channel configuration',
+  '不是有效的导出文件': 'Not a valid export file',
+  '文件中没有渠道配置': 'No channel configuration in the file',
+  '文件中包含无效的渠道条目': 'The file contains an invalid channel entry',
+  '解析文件失败': 'Failed to parse the file',
+  '文件预览': 'File preview',
+  '共 {n} 个渠道': '{n} channels',
+  '其中 {n} 个挂载路径已存在': '{n} of them have existing mount paths',
+  '已存在': 'Exists',
+  '新增': 'New',
+  '冲突处理（挂载路径已存在时）': 'Conflict handling (mount path already exists)',
+  '跳过已存在': 'Skip existing',
+  '保留现有配置，只导入不存在的渠道':
+    'Keep the current configuration and only import channels that do not exist',
+  '覆盖已存在': 'Overwrite existing',
+  '用文件中的配置更新现有渠道':
+    'Update existing channels with the configuration from the file',
+  '覆盖会用文件中的配置替换现有渠道的设置（包括凭据），且不可撤销。':
+    'Overwriting replaces the settings of existing channels (including credentials) with the file contents and cannot be undone.',
+  '开始导入': 'Start import',
+  '导入中…': 'Importing…',
+  '导入完成：新建 {a}，更新 {b}，跳过 {c}':
+    'Import finished: {a} created, {b} updated, {c} skipped',
+  '导入完成，但有 {n} 个失败': 'Import finished with {n} failures',
+  '导入失败': 'Import failed',
+  '已创建': 'Created',
+  '已更新': 'Updated',
+  '已跳过': 'Skipped',
+  '跳过': 'Skipped',
+  '选择': 'Select',
+
   // ---- shares/users/metas ----
   '共 {n} 个分享 · 在文件页选择对象后可创建分享': '{n} shares · select items on the Files page to create one',
   '在文件页右键或勾选文件即可创建分享链接': 'Right-click or tick files on the Files page to create share links',

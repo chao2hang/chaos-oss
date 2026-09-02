@@ -41,6 +41,15 @@ func GetStorages(pageIndex, pageSize int) ([]model.Storage, int64, error) {
 	return storages, count, nil
 }
 
+// GetAllStorages Get all storages from database, including disabled ones
+func GetAllStorages() ([]model.Storage, error) {
+	var storages []model.Storage
+	if err := addStorageOrder(db).Find(&storages).Error; err != nil {
+		return nil, errors.WithStack(err)
+	}
+	return storages, nil
+}
+
 // GetStorageById Get Storage by id, used to update storage usually
 func GetStorageById(id uint) (*model.Storage, error) {
 	var storage model.Storage

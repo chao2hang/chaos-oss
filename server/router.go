@@ -152,6 +152,9 @@ func admin(g *gin.RouterGroup) {
 	storage.POST("/enable", handles.EnableStorage)
 	storage.POST("/disable", handles.DisableStorage)
 	storage.POST("/load_all", handles.LoadAllStorages)
+	// export / import channel (storage) configurations as portable JSON
+	storage.GET("/export", handles.ExportStorages)
+	storage.POST("/import", handles.ImportStorages)
 
 	driver := g.Group("/driver")
 	driver.GET("/list", handles.ListDriverInfo)

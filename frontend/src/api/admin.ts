@@ -83,6 +83,57 @@ export function enableStorage(id: number, enable: boolean) {
   return request<never>(path, { method: 'POST', query: { id } })
 }
 
+/* ---------------- storage export / import ---------------- */
+
+/** Portable export file produced by the backend export endpoint. */
+export interface StorageExportFile {
+  version: number
+  exported_at: string
+  storages: Storage[]
+}
+
+export type StorageImportAction = 'created' | 'updated' | 'skipped' | 'failed'
+
+export interface StorageImportResult {
+  mount_path: string
+  driver: string
+  action: StorageImportAction
+  error?: string
+}
+
+export interface StorageImportSummary {
+  created: number
+  updated: number
+  skipped: number
+  failed: number
+  results: StorageImportResult[]
+}
+
+/**
+ * Export the configuration of all storages, or only the ones whose ids are
+ * given (empty/undefined = all). The payload contains driver credentials.
+ */
+export function exportStorages(ids?: number[]) {
+  const query =
+    ids && ids.length > 0 ? { ids: ids.join(',') } : undefined
+  return request<StorageExportFile>('/api/admin/storage/export', { query })
+}
+
+/**
+ * Import storages from an export payload. `strategy` decides what happens
+ * when a storage with the same mount path already exists: 'skip' keeps the
+ * existing one, 'overwrite' updates it in place.
+ */
+export function importStorages(
+  storages: Storage[],
+  strategy: 'skip' | 'overwrite',
+) {
+  return request<StorageImportSummary>('/api/admin/storage/import', {
+    method: 'POST',
+    body: { storages, strategy },
+  })
+}
+
 /* ---------------- 123 云盘 OAuth 助手 ---------------- */
 
 export function pan123OAuthInfo() {

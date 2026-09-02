@@ -4,6 +4,7 @@ import {
   message,
   Input,
   Button,
+  Checkbox,
   Table,
   TableBody,
   TableCell,
@@ -26,12 +27,21 @@ import {
   CircleCheckIcon,
   CircleXIcon,
   TriangleAlertIcon,
+  DownloadIcon,
+  UploadIcon,
 } from "lucide-react";
-import { listStorages, deleteStorage, enableStorage, updateStorage } from "../../api/admin";
+import {
+  listStorages,
+  deleteStorage,
+  enableStorage,
+  updateStorage,
+  exportStorages,
+} from "../../api/admin";
 import type { Storage } from "../../api/types";
 import { ArrowUpIcon, ArrowDownIcon, RadarIcon, SquareIcon } from "lucide-react";
 import { scanStart, scanStop, scanProgress } from "../../api/admin";
 import StorageFormDialog from "./AddStorageDialog";
+import StorageImportDialog from "./StorageImportDialog";
 import { useI18n } from '../../i18n'
 
 export default function ManageStorages() {
@@ -45,6 +55,54 @@ export default function ManageStorages() {
   // add / edit dialog state
   const [addOpen, setAddOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Storage | null>(null);
+
+  // import dialog state
+  const [importOpen, setImportOpen] = useState(false);
+
+  // selected storage ids for partial export
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const toggleSelect = (id: number, checked: boolean) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+  const storages = list.data?.content ?? [];
+  // only ids still present in the list count (a selection may go stale
+  // after a delete or refresh)
+  const liveSelected = storages.filter((s) => selected.has(s.id));
+  const allSelected =
+    storages.length > 0 && liveSelected.length === storages.length;
+
+  /** Download the (selected or all) channel configs as a JSON file. */
+  const doExport = async () => {
+    const ids = liveSelected.map((s) => s.id);
+    try {
+      const data = await exportStorages(ids.length > 0 ? ids : undefined);
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const ts = new Date()
+        .toISOString()
+        .replace(/[:T]/g, "-")
+        .slice(0, 19);
+      a.href = url;
+      a.download = `chaos-oss-storages-${ts}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      message.success(
+        t("已导出 {n} 个渠道，文件包含凭据，请妥善保管", {
+          n: data.storages.length,
+        }),
+      );
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "导出失败");
+    }
+  };
 
   const del = useMutation({
     mutationFn: deleteStorage,
@@ -77,8 +135,6 @@ export default function ManageStorages() {
     }
   };
 
-  const storages = list.data?.content ?? [];
-
   return (
     <div className="p-4 md:p-8">
       <div className="mb-6 flex items-center justify-between">
@@ -88,10 +144,36 @@ export default function ManageStorages() {
             {t('已挂载的后端存储，共 {n} 个', { n: storages.length })}
           </p>
         </div>
-        <Button size="sm" onClick={() => setAddOpen(true)}>
-          <PlusIcon className="mr-1.5 h-3.5 w-3.5" />
-          {t('添加存储')}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={list.isLoading || storages.length === 0}
+            title={
+              liveSelected.length > 0
+                ? t('导出选中的 {n} 个渠道', { n: liveSelected.length })
+                : t('导出全部渠道')
+            }
+            onClick={doExport}
+          >
+            <DownloadIcon className="mr-1.5 h-3.5 w-3.5" />
+            {liveSelected.length > 0
+              ? t('导出 ({n})', { n: liveSelected.length })
+              : t('导出')}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setImportOpen(true)}
+          >
+            <UploadIcon className="mr-1.5 h-3.5 w-3.5" />
+            {t('导入')}
+          </Button>
+          <Button size="sm" onClick={() => setAddOpen(true)}>
+            <PlusIcon className="mr-1.5 h-3.5 w-3.5" />
+            {t('添加存储')}
+          </Button>
+        </div>
       </div>
 
       <ScanCard />
@@ -100,6 +182,20 @@ export default function ManageStorages() {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-[36px]">
+                <Checkbox
+                  aria-label={t('全选')}
+                  checked={allSelected}
+                  indeterminate={liveSelected.length > 0 && !allSelected}
+                  onCheckedChange={(checked) => {
+                    setSelected(
+                      checked
+                        ? new Set(storages.map((s) => s.id))
+                        : new Set(),
+                    )
+                  }}
+                />
+              </TableHead>
               <TableHead className="w-[34%]">{t('挂载路径')}</TableHead>
               <TableHead className="w-[18%]">{t('驱动')}</TableHead>
               <TableHead className="w-[14%]">{t('状态')}</TableHead>
@@ -111,14 +207,14 @@ export default function ManageStorages() {
             {list.isLoading ? (
               Array.from({ length: 3 }).map((_, i) => (
                 <TableRow key={i}>
-                  <TableCell colSpan={5}>
+                  <TableCell colSpan={6}>
                     <Skeleton className="h-5 w-full" />
                   </TableCell>
                 </TableRow>
               ))
             ) : storages.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5}>
+                <TableCell colSpan={6}>
                   <EmptyState
                     icon={HardDriveIcon}
                     title={t("暂无存储")}
@@ -128,7 +224,16 @@ export default function ManageStorages() {
               </TableRow>
             ) : (
               storages.map((s, idx) => (
-                <TableRow key={s.id}>
+                <TableRow key={s.id} data-state={selected.has(s.id) ? "selected" : undefined}>
+                  <TableCell>
+                    <Checkbox
+                      aria-label={t('选择') + ' ' + s.mount_path}
+                      checked={selected.has(s.id)}
+                      onCheckedChange={(checked) =>
+                        toggleSelect(s.id, checked)
+                      }
+                    />
+                  </TableCell>
                   <TableCell>
                     <span className="flex items-center gap-1.5 font-mono text-xs">
                       <FolderIcon className="h-3.5 w-3.5 shrink-0 text-primary" />
@@ -230,6 +335,7 @@ export default function ManageStorages() {
           if (!v) setEditTarget(null);
         }}
       />
+      <StorageImportDialog open={importOpen} onOpenChange={setImportOpen} />
     </div>
   );
 }
