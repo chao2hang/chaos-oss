@@ -319,6 +319,11 @@ BuildDockerMultiplatform() {
 
 BuildRelease() {
   mkdir -p "build"
+  # populate the module cache as the invoking user BEFORE xgo runs: xgo
+  # builds inside docker as root and would otherwise create root-owned
+  # cache dirs, breaking every later host-side go build on the same
+  # runner (permission denied writing the module cache)
+  go mod download
   # chaos-oss: Linux-only release builds (windows/darwin/android/freebsd
   # were dropped to keep the asset list small)
   xgo -targets=linux/amd64,linux/arm64,linux/386,linux/riscv64,linux/ppc64le \
