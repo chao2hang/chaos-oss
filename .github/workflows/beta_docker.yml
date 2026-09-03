@@ -33,7 +33,7 @@ jobs:
       - name: Build Linux amd64 static binary
         run: |
           mkdir -p build/linux/amd64
-          go build \
+          CGO_ENABLED=0 go build \
             -tags=jsoniter \
             -ldflags="-w -s" \
             -o build/linux/amd64/openlist .
