@@ -17,157 +17,56 @@ jobs:
     name: Beta Release Changelog
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - name: Create or update ref
-        id: create-or-update-ref
-        uses: ovsds/create-or-update-ref-action@v1
-        with:
-          ref: tags/beta
-          sha: ${{ github.sha }}
-
-      - name: Delete beta tag
-        run: git tag -d beta
-        continue-on-error: true
-
-      - name: changelog # or changelogithub@0.12 if ensure the stable result
-        id: changelog
+      - name: Create or update beta ref
         run: |
-          git tag -l
-          npx changelogithub --from 89077c35 --output CHANGELOG.md
+          git tag -f beta
+          git push origin beta -f || true
 
-      - name: Upload assets to beta release
+      - name: Write CHANGELOG
+        run: |
+          npx changelogithub --from 89077c35 --output CHANGELOG.md || true
+
+      - name: Upload changelog to beta release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if ! gh release view beta; then
-            gh release create beta --prerelease --notes-file CHANGELOG.md
-          else
-            gh release edit beta --prerelease --notes-file CHANGELOG.md
-          fi
-          gh release upload beta "CHANGELOG.md" --clobber
-
-      - name: Upload assets to github artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: beta changelog
-          path: ${{ github.workspace }}/CHANGELOG.md
-          compression-level: 0
-          if-no-files-found: error # 'warn' or 'ignore' are also available, defaults to `warn`
+          gh release create beta --prerelease --notes-file CHANGELOG.md --title "Beta (latest)" --clobber 2>/dev/null || gh release edit beta --prerelease --notes-file CHANGELOG.md
 
   release:
-    needs:
-      - changelog
-    strategy:
-      matrix:
-        include:
-          - target: "!(*musl*|*windows-arm64*|*windows7-*|*android*|*freebsd*)" # xgo and loongarch (exclude mips64le)
-            hash: "md5"
-            flags: ""
-            goflags: ""
-          - target: "linux-(mips|mips64|mipsle|mips64le|loong64)-musl*" # musl-compat-family
-            hash: "md5-linux-musl-mips"
-            flags: "-ldflags=-linkmode external -extldflags '-static -fpic'"
-            goflags: ""
-            musl_static: "true"
-          - target: "linux-!(arm*|mips|mips64|mipsle|mips64le|loong64)-musl*" # musl-not-arm (exclude compat-family)
-            hash: "md5-linux-musl"
-            flags: "-ldflags=-linkmode external -extldflags '-static -fpic'"
-            goflags: ""
-            musl_static: "true"
-          - target: "linux-arm*-musl*" #musl-arm
-            hash: "md5-linux-musl-arm"
-            flags: "-ldflags=-linkmode external -extldflags '-static -fpic'"
-            goflags: ""
-            musl_static: "true"
-
-    name: Beta Release
+    needs: changelog
+    name: Linux amd64 Build
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Setup Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        uses: actions/setup-go@v7
         with:
           go-version: "1.26.4"
 
-      - name: Setup web
-        run: bash build.sh dev web
+      - name: Build Linux amd64 static binary
+        run: |
+          mkdir -p build
+          BUILD_AT="$(date +'%F %T %z')"
+          GIT_COMMIT="$(git rev-parse --short HEAD)"
+          go build \
+            -tags=jsoniter \
+            -ldflags="-w -s -X 'github.com/OpenListTeam/OpenList/v4/internal/conf.BuiltAt=$BUILD_AT' -X 'github.com/OpenListTeam/OpenList/v4/internal/conf.GitCommit=$GIT_COMMIT' -X 'github.com/OpenListTeam/OpenList/v4/internal/conf.Version=beta' -X 'github.com/OpenListTeam/OpenList/v4/internal/conf.WebVersion=rolling'" \
+            -o build/chaos-oss-linux-amd64 .
+
+      - name: Compress binary
+        run: |
+          mkdir -p build/compress
+          cd build
+          zip -j compress/chaos-oss-linux-amd64.zip chaos-oss-linux-amd64
+
+      - name: Upload to beta release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          FRONTEND_REPO: ${{ vars.FRONTEND_REPO }}
-
-      - name: Build
-        uses: OpenListTeam/cgo-actions@v1.2.5
-        with:
-          targets: ${{ matrix.target }}
-          flags: ${{ matrix.flags || '-ldflags=' }}
-          static-link-for-musl: true
-          musl-target-format: $os-$musl-$arch
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          out-dir: build
-          output: openlist-$target$ext
-          musl-base-url: "https://github.com/OpenListTeam/musl-compilers/releases/latest/download/"
-          x-flags: |
-            github.com/OpenListTeam/OpenList/v4/internal/conf.BuiltAt=$built_at
-            github.com/OpenListTeam/OpenList/v4/internal/conf.GitAuthor=The OpenList Projects Contributors <noreply@openlist.team>
-            github.com/OpenListTeam/OpenList/v4/internal/conf.GitCommit=$git_commit
-            github.com/OpenListTeam/OpenList/v4/internal/conf.Version=$tag
-            github.com/OpenListTeam/OpenList/v4/internal/conf.WebVersion=rolling
-        env:
-          GOFLAGS: ${{ matrix.goflags }}
-
-      - name: Verify musl binaries are static
-        if: matrix.musl_static == 'true'
-        run: |
-          set -e
-          shopt -s nullglob
-          files=(build/openlist-*-musl-*)
-          if [ ${#files[@]} -eq 0 ]; then
-            echo "No musl binaries found"
-            exit 1
-          fi
-          for f in "${files[@]}"; do
-            if readelf -l "$f" | grep -q "Requesting program interpreter"; then
-              echo "Dynamic binary detected: $f"
-              readelf -l "$f" | grep "Requesting program interpreter" || true
-              exit 1
-            fi
-          done
-
-      - name: Compress
-        run: |
-          bash build.sh zip ${{ matrix.hash }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload assets to beta release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          for file in build/compress/*; do
-            gh release upload beta "$file" --clobber
-          done
-
-      - name: Clean illegal characters from matrix.target
-        id: clean_target_name
-        run: |
-          ILLEGAL_CHARS_REGEX='[":<>|*?\\/\r\n]'
-          CLEANED_TARGET=$(echo "${{ matrix.target }}" | sed -E "s/$ILLEGAL_CHARS_REGEX//g")
-          echo "Original target: ${{ matrix.target }}"
-          echo "Cleaned target: $CLEANED_TARGET"
-          echo "cleaned_target=$CLEANED_TARGET" >> $GITHUB_ENV
-
-      - name: Upload assets to github artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: beta builds for ${{ env.cleaned_target }}
-          path: ${{ github.workspace }}/build/compress/*
-          compression-level: 0
-          if-no-files-found: error # 'warn' or 'ignore' are also available, defaults to `warn`
+        run: gh release upload beta build/compress/chaos-oss-linux-amd64.zip --clobber
