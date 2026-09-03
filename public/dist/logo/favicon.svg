@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="chaos-oss">
+  <title>chaos-oss</title>
+  <rect width="32" height="32" rx="6" fill="#0a0a0a"/>
+  <g fill="none" stroke="#fafafa" stroke-width="2.25" stroke-linecap="square">
+    <path d="M 10.5 7.75 V 24.25"/>
+    <path d="M 10.5 15.25 H 21.5"/>
+    <path d="M 10.5 24.25 H 21.5"/>
+  </g>
+  <rect x="8" y="5.25" width="5" height="5" rx="1.25" fill="#fafafa"/>
+  <rect x="19" y="12.75" width="5" height="5" rx="1.25" fill="#6b88ff"/>
+  <rect x="19" y="21.75" width="5" height="5" rx="1.25" fill="#fafafa"/>
+</svg>
