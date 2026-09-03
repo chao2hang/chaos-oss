@@ -15,10 +15,10 @@ import (
 	"github.com/OpenListTeam/OpenList/v4/internal/conf"
 	"github.com/OpenListTeam/OpenList/v4/internal/db"
 	"github.com/OpenListTeam/OpenList/v4/internal/fs"
+	"github.com/OpenListTeam/OpenList/v4/internal/op"
 	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
 	"github.com/OpenListTeam/OpenList/v4/server"
 	"github.com/OpenListTeam/OpenList/v4/server/middlewares"
-	"github.com/OpenListTeam/OpenList/v4/internal/op"
 	s3server "github.com/OpenListTeam/OpenList/v4/server/s3"
 	"github.com/OpenListTeam/sftpd-openlist"
 	ftpserver "github.com/fclairamb/ftpserverlib"
@@ -208,7 +208,7 @@ func Start() {
 			}
 		}()
 	}
-	if conf.Conf.S3.Port != -1 && conf.Conf.S3.Enable {
+	if !s3server.HasConfiguredBuckets() && conf.Conf.S3.Port != -1 && conf.Conf.S3.Enable {
 		s3r := gin.New()
 		s3r.Use(gin.LoggerWithWriter(log.StandardLogger().Out), gin.RecoveryWithWriter(log.StandardLogger().Out))
 		server.InitS3(s3r)

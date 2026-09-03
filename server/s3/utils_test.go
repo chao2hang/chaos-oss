@@ -6,6 +6,28 @@ import (
 	"testing"
 )
 
+func TestHasConfiguredBuckets(t *testing.T) {
+	tests := []struct {
+		name    string
+		buckets []Bucket
+		want    bool
+	}{
+		{name: "empty", buckets: nil, want: false},
+		{name: "missing name", buckets: []Bucket{{Paths: []string{"/disk"}}}, want: false},
+		{name: "missing path", buckets: []Bucket{{Name: "files"}}, want: false},
+		{name: "blank path", buckets: []Bucket{{Name: "files", Paths: []string{" ", ""}}}, want: false},
+		{name: "valid paths", buckets: []Bucket{{Name: "files", Paths: []string{" /disk "}}}, want: true},
+		{name: "legacy path", buckets: []Bucket{{Name: "files", Path: "/disk"}}, want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := hasConfiguredBuckets(tt.buckets); got != tt.want {
+				t.Fatalf("hasConfiguredBuckets() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestBucketNormalize_LegacyPath(t *testing.T) {
 	b := Bucket{Name: "backup", Path: "/disk1/bk"}
 	got := b.normalized()

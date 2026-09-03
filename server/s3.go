@@ -12,24 +12,21 @@ import (
 )
 
 func S3(g *gin.RouterGroup) {
-	if !conf.Conf.S3.Enable {
-		g.Any("/*path", func(c *gin.Context) {
-			common.ErrorStrResp(c, "S3 server is not enabled", 403)
-		})
-		return
-	}
-	if conf.Conf.S3.Port != -1 {
-		g.Any("/*path", func(c *gin.Context) {
-			common.ErrorStrResp(c, "S3 server bound to single port", 403)
-		})
-		return
-	}
+	// Bucket configuration is the activation switch for the shared endpoint.
+	// The explicit flag remains supported for legacy deployments.
 	h, _ := s3.NewServer(context.Background())
+	wrapped := gin.WrapH(h)
 
 	g.Any("/*path", func(c *gin.Context) {
+		if !s3.HasConfiguredBuckets() {
+			common.ErrorStrResp(c, "S3 server is not enabled; configure an S3 bucket first", 403)
+			return
+		}
+		// A valid bucket always uses the main service port. A standalone port is
+		// only selected by the legacy standalone server below.
 		adjustedPath := strings.TrimPrefix(c.Request.URL.Path, path.Join(conf.URL.Path, "/s3"))
 		c.Request.URL.Path = adjustedPath
-		gin.WrapH(h)(c)
+		wrapped(c)
 	})
 }
 

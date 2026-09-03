@@ -118,6 +118,29 @@ func getAndParseBuckets() ([]Bucket, error) {
 	return res, nil
 }
 
+// hasConfiguredBuckets reports whether at least one usable S3 bucket is
+// configured. A usable bucket has both a name and at least one backing path.
+func hasConfiguredBuckets(buckets []Bucket) bool {
+	for _, bucket := range buckets {
+		if strings.TrimSpace(bucket.Name) != "" && len(bucket.effectivePaths()) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// HasConfiguredBuckets reports whether at least one usable S3 bucket is
+// configured. The main-port S3 gateway uses this as its activation switch so
+// operators do not need to maintain a separate enable flag.
+func HasConfiguredBuckets() bool {
+	buckets, err := getAndParseBuckets()
+	if err != nil {
+		log.Errorf("s3: failed to parse bucket configuration: %+v", err)
+		return false
+	}
+	return hasConfiguredBuckets(buckets)
+}
+
 // getBucketByName returns the bucket configuration with the given name.
 // The returned bucket is already normalized.
 func getBucketByName(name string) (Bucket, error) {

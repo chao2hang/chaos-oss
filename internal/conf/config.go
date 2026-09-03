@@ -229,8 +229,10 @@ func DefaultConfig(dataDir string) *Config {
 			AllowHeaders: []string{"*"},
 		},
 		S3: S3{
+			// S3 is automatically exposed at /s3 on the main service port
+			// once a valid bucket is configured.
 			Enable: false,
-			Port:   5246,
+			Port:   -1,
 			SSL:    false,
 		},
 		FTP: FTP{

@@ -1,14 +1,13 @@
 services:
-  openlist:
-    restart: always
+  chaos-oss:
+    restart: unless-stopped
     volumes:
-      - '/etc/openlist:/opt/openlist/data'
+      - '/etc/chaos-oss:/opt/openlist/data'
     ports:
       - '5244:5244'
-      - '5245:5245'
     user: '0:0'
     environment:
       - UMASK=022
       - TZ=Asia/Shanghai
-    container_name: openlist
-    image: 'openlistteam/openlist:latest'
+    container_name: chaos-oss
+    image: 'ghcr.io/chao2hang/chaos-oss:latest'
