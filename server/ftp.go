@@ -24,6 +24,16 @@ import (
 	ftpserver "github.com/fclairamb/ftpserverlib"
 )
 
+const legacyDefaultAnnouncement = "Welcome to the OpenList project!\nFor the latest updates, to contribute code, or to submit suggestions and issues, please visit our [project repository](https://github.com/OpenListTeam/OpenList)."
+
+func ftpBanner() string {
+	announcement := setting.GetStr(conf.Announcement)
+	if announcement == "" || announcement == legacyDefaultAnnouncement {
+		return "Welcome."
+	}
+	return announcement
+}
+
 type FtpMainDriver struct {
 	settings     *ftpserver.Settings
 	proxyHeader  http.Header
@@ -68,7 +78,7 @@ func NewMainDriver() (*FtpMainDriver, error) {
 			DisableMLSD:              false,
 			DisableMLST:              false,
 			DisableMFMT:              true,
-			Banner:                   setting.GetStr(conf.Announcement),
+			Banner:                   ftpBanner(),
 			TLSRequired:              tlsRequired,
 			DisableLISTArgs:          false,
 			DisableSite:              false,
@@ -101,7 +111,7 @@ func (d *FtpMainDriver) ClientConnected(cc ftpserver.ClientContext) (string, err
 	}
 	defer d.shutdownLock.RUnlock()
 	d.clients[cc.ID()] = cc
-	return "OpenList FTP Endpoint", nil
+	return "File Service", nil
 }
 
 func (d *FtpMainDriver) ClientDisconnected(cc ftpserver.ClientContext) {

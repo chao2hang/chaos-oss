@@ -158,5 +158,5 @@ func (d *SftpDriver) AuthLogCallback(conn ssh.ConnMetadata, method string, err e
 }
 
 func (d *SftpDriver) GetBanner(_ ssh.ConnMetadata) string {
-	return setting.GetStr(conf.Announcement)
+	return ftpBanner()
 }

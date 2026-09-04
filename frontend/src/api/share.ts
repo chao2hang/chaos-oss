@@ -76,8 +76,8 @@ export function shareUrl(sid: string, pwd?: string): string {
 
 function basePathSafe(): string {
   try {
-    const w = window as unknown as { OPENLIST_CONFIG?: { base_path?: string } }
-    const bp = w.OPENLIST_CONFIG?.base_path
+    const w = window as unknown as { __APP_CONFIG__?: { base_path?: string } }
+    const bp = w.__APP_CONFIG__?.base_path
     return bp && bp !== '/' ? bp.replace(/\/$/, '') : ''
   } catch {
     return ''

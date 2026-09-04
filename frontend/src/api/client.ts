@@ -27,16 +27,16 @@ export class ApiError extends Error {
   }
 }
 
-interface OpenListConfig {
+interface AppConfig {
   cdn?: string
   base_path?: string
   api?: string
   main_color?: string
 }
 
-function config(): OpenListConfig {
-  const w = window as unknown as { OPENLIST_CONFIG?: OpenListConfig }
-  return w.OPENLIST_CONFIG ?? {}
+function config(): AppConfig {
+  const w = window as unknown as { __APP_CONFIG__?: AppConfig }
+  return w.__APP_CONFIG__ ?? {}
 }
 
 export function basePath(): string {

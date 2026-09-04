@@ -18,6 +18,7 @@ import (
 
 func Init(e *gin.Engine) {
 	e.ContextWithFallback = true
+	e.Use(middlewares.SecurityHeaders)
 	if !utils.SliceContains([]string{"", "/"}, conf.URL.Path) {
 		e.GET("/", func(c *gin.Context) {
 			c.Redirect(302, conf.URL.Path)
@@ -77,7 +78,7 @@ func Init(e *gin.Engine) {
 	api.POST("/auth/login/ldap", middlewares.LoginRateLimit, handles.LoginLdap)
 	// Refresh-token flow: exchange a long-lived refresh token for a new
 	// access token without re-entering credentials.
-	api.POST("/auth/refresh", handles.RefreshToken)
+	api.POST("/auth/refresh", middlewares.RefreshRateLimit, handles.RefreshToken)
 	auth.GET("/me", handles.CurrentUser)
 	auth.POST("/me/update", handles.UpdateCurrent)
 	auth.GET("/me/sshkey/list", handles.ListMyPublicKey)
@@ -86,6 +87,7 @@ func Init(e *gin.Engine) {
 	auth.POST("/auth/2fa/generate", handles.Generate2FA)
 	auth.POST("/auth/2fa/verify", handles.Verify2FA)
 	auth.GET("/auth/logout", handles.LogOut)
+	auth.POST("/auth/logout", handles.LogOut)
 
 	// auth
 	api.GET("/auth/sso", handles.SSOLoginRedirect)
@@ -94,8 +96,8 @@ func Init(e *gin.Engine) {
 	api.GET("/auth/sso_get_token", handles.SSOLoginCallback)
 
 	// webauthn
-	api.GET("/authn/webauthn_begin_login", handles.BeginAuthnLogin)
-	api.POST("/authn/webauthn_finish_login", handles.FinishAuthnLogin)
+	api.GET("/authn/webauthn_begin_login", middlewares.WebAuthnLoginRateLimit, handles.BeginAuthnLogin)
+	api.POST("/authn/webauthn_finish_login", middlewares.WebAuthnLoginRateLimit, handles.FinishAuthnLogin)
 	webauthn.GET("/webauthn_begin_registration", handles.BeginAuthnRegistration)
 	webauthn.POST("/webauthn_finish_registration", handles.FinishAuthnRegistration)
 	webauthn.POST("/delete_authn", handles.DeleteAuthnLogin)
@@ -103,9 +105,9 @@ func Init(e *gin.Engine) {
 
 	// no need auth
 	public := api.Group("/public")
-	public.Any("/settings", handles.PublicSettings)
-	public.Any("/offline_download_tools", handles.OfflineDownloadTools)
-	public.Any("/archive_extensions", handles.ArchiveExtensions)
+	public.GET("/settings", handles.PublicSettings)
+	public.GET("/offline_download_tools", handles.OfflineDownloadTools)
+	public.GET("/archive_extensions", handles.ArchiveExtensions)
 
 	_fs(auth.Group("/fs"))
 	fsAndShare(api.Group("/fs", middlewares.Auth(true)))

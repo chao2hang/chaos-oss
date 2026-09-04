@@ -4,7 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 
 // Dev: proxy API/download traffic to the Go backend on :5244.
 // Build: emit straight into the repo's public/dist so the Go binary can
-// embed / serve it exactly like the old downloaded OpenList-Frontend dist.
+// embed and serve the bundled frontend directly.
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {

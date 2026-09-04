@@ -195,7 +195,7 @@ export default function Login() {
         </Form>
 
         <p className="mt-4 text-center text-xs text-muted-foreground">
-          chaos-oss · refined OpenList
+          chaos-oss
         </p>
       </div>
     </div>

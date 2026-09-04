@@ -63,7 +63,7 @@ func GenerateToken(user *model.User) (tokenString string, err error) {
 	if err != nil {
 		return "", err
 	}
-	validTokenCache.Set(tokenString, true)
+	validTokenCache.Set(tokenString, true, cache.WithExAt[bool](claim.ExpiresAt.Time))
 	return tokenString, err
 }
 
@@ -86,7 +86,7 @@ func GenerateRefreshToken(user *model.User) (tokenString string, err error) {
 	if err != nil {
 		return "", err
 	}
-	validTokenCache.Set(tokenString, true)
+	validTokenCache.Set(tokenString, true, cache.WithExAt[bool](claim.ExpiresAt.Time))
 	return tokenString, err
 }
 
@@ -99,10 +99,7 @@ func AccessTokenTTL() int64 {
 func ParseToken(tokenString string) (*UserClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &UserClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return SecretKey, nil
-	})
-	if IsTokenInvalidated(tokenString) {
-		return nil, errors.New("token is invalidated")
-	}
+	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
 	if err != nil {
 		if ve, ok := err.(*jwt.ValidationError); ok {
 			if ve.Errors&jwt.ValidationErrorMalformed != 0 {
@@ -111,10 +108,12 @@ func ParseToken(tokenString string) (*UserClaims, error) {
 				return nil, errors.New("token is expired")
 			} else if ve.Errors&jwt.ValidationErrorNotValidYet != 0 {
 				return nil, errors.New("token not active yet")
-			} else {
-				return nil, errors.New("couldn't handle this token")
 			}
 		}
+		return nil, errors.New("couldn't handle this token")
+	}
+	if IsTokenInvalidated(tokenString) {
+		return nil, errors.New("token is invalidated")
 	}
 	if claims, ok := token.Claims.(*UserClaims); ok && token.Valid {
 		// A refresh token must never authenticate a regular API call.
@@ -131,12 +130,12 @@ func ParseToken(tokenString string) (*UserClaims, error) {
 func ParseRefreshToken(tokenString string) (*UserClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &UserClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return SecretKey, nil
-	})
-	if IsTokenInvalidated(tokenString) {
-		return nil, errors.New("refresh token is invalidated")
-	}
+	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
 	if err != nil {
 		return nil, errors.New("refresh token is invalid or expired")
+	}
+	if IsTokenInvalidated(tokenString) {
+		return nil, errors.New("refresh token is invalidated")
 	}
 	claims, ok := token.Claims.(*UserClaims)
 	if !ok || !token.Valid {

@@ -38,6 +38,10 @@ func BeginAuthnLogin(c *gin.Context) {
 		var user *model.User
 		user, err = db.GetUserByName(username)
 		if err == nil {
+			if user.IsGuest() || user.Disabled {
+				common.ErrorStrResp(c, "WebAuthn is unavailable for this account", 401)
+				return
+			}
 			options, sessionData, err = authnInstance.BeginLogin(user)
 		}
 	} else { // client-side discoverable login
@@ -91,6 +95,10 @@ func FinishAuthnLogin(c *gin.Context) {
 			common.ErrorResp(c, err, 400)
 			return
 		}
+		if user.IsGuest() || user.Disabled {
+			common.ErrorStrResp(c, "WebAuthn is unavailable for this account", 401)
+			return
+		}
 		_, err = authnInstance.FinishLogin(user, sessionData, c.Request)
 	} else { // client-side discoverable login
 		_, err = authnInstance.FinishDiscoverableLogin(func(_, userHandle []byte) (webauthn.User, error) {
@@ -103,11 +111,19 @@ func FinishAuthnLogin(c *gin.Context) {
 				return nil, err
 			}
 
+			if user.IsGuest() || user.Disabled {
+				return nil, fmt.Errorf("WebAuthn is unavailable for this account")
+			}
+
 			return user, nil
 		}, sessionData, c.Request)
 	}
 	if err != nil {
 		common.ErrorResp(c, err, 400)
+		return
+	}
+	if user == nil || user.IsGuest() || user.Disabled {
+		common.ErrorStrResp(c, "WebAuthn is unavailable for this account", 401)
 		return
 	}
 
@@ -126,6 +142,10 @@ func BeginAuthnRegistration(c *gin.Context) {
 		return
 	}
 	user := c.Request.Context().Value(conf.UserKey).(*model.User)
+	if user.IsGuest() || user.Disabled {
+		common.ErrorStrResp(c, "WebAuthn is unavailable for this account", 403)
+		return
+	}
 
 	authnInstance, err := authn.NewAuthnInstance(c)
 	if err != nil {
@@ -162,6 +182,10 @@ func FinishAuthnRegistration(c *gin.Context) {
 		return
 	}
 	user := c.Request.Context().Value(conf.UserKey).(*model.User)
+	if user.IsGuest() || user.Disabled {
+		common.ErrorStrResp(c, "WebAuthn is unavailable for this account", 403)
+		return
+	}
 	sessionDataString := c.GetHeader("Session")
 
 	authnInstance, err := authn.NewAuthnInstance(c)
@@ -203,6 +227,10 @@ func FinishAuthnRegistration(c *gin.Context) {
 
 func DeleteAuthnLogin(c *gin.Context) {
 	user := c.Request.Context().Value(conf.UserKey).(*model.User)
+	if user.IsGuest() || user.Disabled {
+		common.ErrorStrResp(c, "WebAuthn is unavailable for this account", 403)
+		return
+	}
 	type DeleteAuthnReq struct {
 		ID string `json:"id"`
 	}
@@ -231,6 +259,10 @@ func GetAuthnCredentials(c *gin.Context) {
 		FingerPrint string `json:"fingerprint"`
 	}
 	user := c.Request.Context().Value(conf.UserKey).(*model.User)
+	if user.IsGuest() || user.Disabled {
+		common.ErrorStrResp(c, "WebAuthn is unavailable for this account", 403)
+		return
+	}
 	credentials := user.WebAuthnCredentials()
 	res := make([]WebAuthnCredentials, 0, len(credentials))
 	for _, v := range credentials {

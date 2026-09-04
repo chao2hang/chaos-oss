@@ -17,7 +17,8 @@ import (
 func Auth(allowDisabledGuest bool) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		token := c.GetHeader("Authorization")
-		if subtle.ConstantTimeCompare([]byte(token), []byte(setting.GetStr(conf.Token))) == 1 {
+		adminToken := setting.GetStr(conf.Token)
+		if adminToken != "" && token != "" && subtle.ConstantTimeCompare([]byte(token), []byte(adminToken)) == 1 {
 			admin, err := op.GetAdmin()
 			if err != nil {
 				common.ErrorResp(c, err, 500)
@@ -25,7 +26,7 @@ func Auth(allowDisabledGuest bool) func(c *gin.Context) {
 				return
 			}
 			common.GinAppendValues(c, conf.UserKey, admin)
-			log.Debugf("use admin token: %+v", admin)
+			log.Debug("authenticated admin token")
 			c.Next()
 			return
 		}
@@ -42,7 +43,7 @@ func Auth(allowDisabledGuest bool) func(c *gin.Context) {
 				return
 			}
 			common.GinAppendValues(c, conf.UserKey, guest)
-			log.Debugf("use empty token: %+v", guest)
+			log.Debug("authenticated guest")
 			c.Next()
 			return
 		}
@@ -70,14 +71,15 @@ func Auth(allowDisabledGuest bool) func(c *gin.Context) {
 			return
 		}
 		common.GinAppendValues(c, conf.UserKey, user)
-		log.Debugf("use login token: %+v", user)
+		log.Debug("authenticated user token")
 		c.Next()
 	}
 }
 
 func Authn(c *gin.Context) {
 	token := c.GetHeader("Authorization")
-	if subtle.ConstantTimeCompare([]byte(token), []byte(setting.GetStr(conf.Token))) == 1 {
+	adminToken := setting.GetStr(conf.Token)
+	if adminToken != "" && token != "" && subtle.ConstantTimeCompare([]byte(token), []byte(adminToken)) == 1 {
 		admin, err := op.GetAdmin()
 		if err != nil {
 			common.ErrorResp(c, err, 500)
@@ -85,20 +87,13 @@ func Authn(c *gin.Context) {
 			return
 		}
 		common.GinAppendValues(c, conf.UserKey, admin)
-		log.Debugf("use admin token: %+v", admin)
+		log.Debug("authenticated admin token")
 		c.Next()
 		return
 	}
 	if token == "" {
-		guest, err := op.GetGuest()
-		if err != nil {
-			common.ErrorResp(c, err, 500)
-			c.Abort()
-			return
-		}
-		common.GinAppendValues(c, conf.UserKey, guest)
-		log.Debugf("use empty token: %+v", guest)
-		c.Next()
+		common.ErrorStrResp(c, "Authorization is required", 401)
+		c.Abort()
 		return
 	}
 	userClaims, err := common.ParseToken(token)
@@ -125,7 +120,7 @@ func Authn(c *gin.Context) {
 		return
 	}
 	common.GinAppendValues(c, conf.UserKey, user)
-	log.Debugf("use login token: %+v", user)
+	log.Debug("authenticated user token")
 	c.Next()
 }
 

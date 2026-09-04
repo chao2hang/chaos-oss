@@ -138,6 +138,7 @@ type Config struct {
 	MCP                   MCP         `json:"mcp" envPrefix:"MCP_"`
 	LastLaunchedVersion   string      `json:"last_launched_version"`
 	ProxyAddress          string      `json:"proxy_address" env:"PROXY_ADDRESS"`
+	TrustedProxies        []string    `json:"trusted_proxies" env:"TRUSTED_PROXIES"`
 }
 
 func DefaultConfig(dataDir string) *Config {
@@ -256,5 +257,6 @@ func DefaultConfig(dataDir string) *Config {
 		},
 		LastLaunchedVersion: "",
 		ProxyAddress:        "",
+		TrustedProxies:      []string{},
 	}
 }

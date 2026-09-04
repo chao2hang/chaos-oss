@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"image/png"
+	"net/http"
 
 	"github.com/OpenListTeam/OpenList/v4/internal/conf"
 	"github.com/OpenListTeam/OpenList/v4/internal/model"
@@ -193,7 +194,7 @@ func Generate2FA(c *gin.Context) {
 		return
 	}
 	key, err := totp.Generate(totp.GenerateOpts{
-		Issuer:      "OpenList",
+		Issuer:      "File Service",
 		AccountName: user.Username,
 	})
 	if err != nil {
@@ -253,7 +254,7 @@ func LogOut(c *gin.Context) {
 	var req struct {
 		RefreshToken string `json:"refresh_token"`
 	}
-	if c.Request.ContentLength > 0 {
+	if c.Request.Method == http.MethodPost && c.Request.ContentLength != 0 {
 		_ = c.ShouldBind(&req)
 		if req.RefreshToken != "" {
 			_ = common.InvalidateToken(req.RefreshToken)

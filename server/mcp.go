@@ -10,7 +10,7 @@ import (
 func MCP(g *gin.RouterGroup) {
 	if !conf.Conf.MCP.Enable {
 		g.Any("/mcp", func(c *gin.Context) {
-			common.ErrorStrResp(c, "MCP server is not enabled", 403)
+			common.ErrorStrResp(c, "service is not enabled", 403)
 		})
 		return
 	}

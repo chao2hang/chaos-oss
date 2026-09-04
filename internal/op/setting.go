@@ -39,6 +39,9 @@ func GetPublicSettingsMap() map[string]string {
 	items, _ := GetPublicSettingItems()
 	pSettings := make(map[string]string)
 	for _, item := range items {
+		if item.Key == "version" {
+			continue
+		}
 		pSettings[item.Key] = item.Value
 	}
 	return pSettings

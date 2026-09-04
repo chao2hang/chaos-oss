@@ -94,6 +94,20 @@ func IsRunning(t string) bool {
 	return running
 }
 
+func configureTrustedProxies(engine *gin.Engine) {
+	if len(conf.Conf.TrustedProxies) == 0 {
+		engine.ForwardedByClientIP = false
+		if err := engine.SetTrustedProxies(nil); err != nil {
+			log.Fatalf("failed to disable trusted proxies: %v", err)
+		}
+		return
+	}
+	engine.ForwardedByClientIP = true
+	if err := engine.SetTrustedProxies(conf.Conf.TrustedProxies); err != nil {
+		log.Fatalf("invalid trusted proxies configuration: %v", err)
+	}
+}
+
 func Start() {
 	if conf.Conf.DelayedStart != 0 {
 		utils.Log.Infof("delayed start for %d seconds", conf.Conf.DelayedStart)
@@ -106,6 +120,7 @@ func Start() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	r := gin.New()
+	configureTrustedProxies(r)
 
 	// gin log
 	if conf.Conf.Log.Filter.Enable {
@@ -210,6 +225,7 @@ func Start() {
 	}
 	if !s3server.HasConfiguredBuckets() && conf.Conf.S3.Port != -1 && conf.Conf.S3.Enable {
 		s3r := gin.New()
+		configureTrustedProxies(s3r)
 		s3r.Use(gin.LoggerWithWriter(log.StandardLogger().Out), gin.RecoveryWithWriter(log.StandardLogger().Out))
 		server.InitS3(s3r)
 		s3Base := fmt.Sprintf("%s:%d", conf.Conf.Scheme.Address, conf.Conf.S3.Port)
