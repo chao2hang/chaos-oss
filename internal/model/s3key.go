@@ -5,14 +5,14 @@ import "time"
 // S3 access key for the S3 gateway. Each key can be scoped to specific
 // buckets (empty = all buckets) and to read-only access.
 type S3AccessKey struct {
-	ID        uint      `json:"id" gorm:"primaryKey"`
-	AccessKey string    `json:"access_key" gorm:"uniqueIndex;size:64"`
-	SecretKey string    `json:"-" gorm:"size:128"`
+	ID        uint   `json:"id" gorm:"primaryKey"`
+	AccessKey string `json:"access_key" gorm:"uniqueIndex;size:64"`
+	SecretKey string `json:"-" gorm:"size:128"`
 	// Buckets is a comma-separated bucket-name list; empty means all.
 	Buckets string `json:"buckets" gorm:"size:1024"`
 	// ReadOnly: when true the key may not PUT/DELETE/COPY.
-	ReadOnly bool      `json:"read_only"`
-	Enabled  bool      `json:"enabled"`
+	ReadOnly bool `json:"read_only"`
+	Enabled  bool `json:"enabled"`
 	// IPAllowlist is a comma-separated CIDR / plain-IP list; empty = any.
 	IPAllowlist string    `json:"ip_allowlist" gorm:"size:1024"`
 	Remark      string    `json:"remark" gorm:"size:256"`
@@ -60,8 +60,8 @@ type S3AuditLog struct {
 	Bucket    string    `json:"bucket" gorm:"size:255;index"`
 	Object    string    `json:"object" gorm:"size:1024"`
 	Status    int       `json:"status"`
-	Size      int64     `json:"size"` // bytes transferred (best effort)
+	Size      int64     `json:"size"`     // bytes transferred (best effort)
 	Duration  int64     `json:"duration"` // milliseconds
 	ClientIP  string    `json:"client_ip" gorm:"size:64"`
-	CreatedAt time.Time `json:"created_at" gorm:"index`
+	CreatedAt time.Time `json:"created_at" gorm:"index"`
 }
