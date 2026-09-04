@@ -147,6 +147,17 @@ func ParseRefreshToken(tokenString string) (*UserClaims, error) {
 	return claims, nil
 }
 
+// ConsumeRefreshToken atomically marks a refresh token as used and reports
+// whether this call was the one that consumed it. Because the consume is a
+// single GetDel, a refresh token presented concurrently — for example a stolen
+// token raced against the legitimate client — can only be exchanged once; the
+// loser observes ok == false. Callers must already have validated the token
+// with ParseRefreshToken.
+func ConsumeRefreshToken(tokenString string) bool {
+	_, ok := validTokenCache.GetDel(tokenString)
+	return ok
+}
+
 func InvalidateToken(tokenString string) error {
 	if tokenString == "" {
 		return nil // don't invalidate empty guest token

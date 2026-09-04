@@ -123,9 +123,10 @@ func RefreshToken(c *gin.Context) {
 		common.ErrorStrResp(c, "credential has changed, please login again", 401)
 		return
 	}
-	// rotate: retire the presented refresh token, issue a fresh pair
-	if err := common.InvalidateToken(req.RefreshToken); err != nil {
-		common.ErrorResp(c, err, 500, true)
+	// Atomically retire the refresh token; a concurrent or replayed use of the
+	// same token loses this race and is rejected, so rotation is exactly-once.
+	if !common.ConsumeRefreshToken(req.RefreshToken) {
+		common.ErrorStrResp(c, "refresh token was already used", 401)
 		return
 	}
 	token, err := common.GenerateToken(user)
