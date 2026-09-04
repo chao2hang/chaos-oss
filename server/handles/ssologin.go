@@ -2,6 +2,7 @@ package handles
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -41,8 +42,14 @@ func generateState(clientID, ip string) string {
 	return state
 }
 
+// verifyState validates an SSO state and consumes it in one step, so a given
+// state can only be used once. This blocks replay and login-CSRF: an attacker
+// cannot reuse a captured state, and an empty/unknown state is rejected.
 func verifyState(clientID, ip, state string) bool {
-	value, ok := stateCache.Get(_keyState(clientID, state))
+	if state == "" {
+		return false
+	}
+	value, ok := stateCache.GetDel(_keyState(clientID, state))
 	return ok && value == ip
 }
 
@@ -74,6 +81,11 @@ func SSOLoginRedirect(c *gin.Context) {
 	urlValues.Add("response_type", "code")
 	urlValues.Add("redirect_uri", redirectUri)
 	urlValues.Add("client_id", clientId)
+	// A random, one-time state is sent to every provider and must be echoed
+	// back on the callback; this is what prevents login-CSRF across all SSO
+	// platforms (not just OIDC).
+	state := generateState(clientId, c.ClientIP())
+	urlValues.Add("state", state)
 	switch platform {
 	case "Github":
 		rUrl = "https://github.com/login/oauth/authorize?"
@@ -94,14 +106,12 @@ func SSOLoginRedirect(c *gin.Context) {
 		endpoint := strings.TrimSuffix(setting.GetStr(conf.SSOEndpointName), "/")
 		rUrl = endpoint + "/login/oauth/authorize?"
 		urlValues.Add("scope", "profile")
-		urlValues.Add("state", endpoint)
 	case "OIDC":
 		oauth2Config, err := GetOIDCClient(c, useCompatibility, redirectUri, method)
 		if err != nil {
 			common.ErrorStrResp(c, err.Error(), 400)
 			return
 		}
-		state := generateState(clientId, c.ClientIP())
 		c.Redirect(http.StatusFound, oauth2Config.AuthCodeURL(state))
 		return
 	default:
@@ -183,6 +193,16 @@ func parseJWT(p string) ([]byte, error) {
 	return payload, nil
 }
 
+// ssoPopup renders a page that posts the payload to the opener's own origin
+// and closes the window. Targeting window.location.origin (instead of "*")
+// prevents any other origin from receiving the payload, and JSON-encoding the
+// payload prevents injection of provider-controlled values (e.g. a user id
+// containing quotes).
+func ssoPopup(payload map[string]string) string {
+	b, _ := json.Marshal(payload)
+	return fmt.Sprintf(`<!DOCTYPE html><html><head></head><body><script>window.opener && window.opener.postMessage(%s, window.location.origin); window.close()</script></body></html>`, b)
+}
+
 func OIDCLoginCallback(c *gin.Context) {
 	useCompatibility := setting.GetBool(conf.SSOCompatibilityMode)
 	method := c.Query("method")
@@ -239,15 +259,7 @@ func OIDCLoginCallback(c *gin.Context) {
 			c.Redirect(302, common.GetApiUrl(c)+"/@manage?sso_id="+userID)
 			return
 		}
-		html := fmt.Sprintf(`<!DOCTYPE html>
-				<head></head>
-				<body>
-				<script>
-				window.opener.postMessage({"sso_id": "%s"}, "*")
-				window.close()
-				</script>
-				</body>`, userID)
-		c.Data(200, "text/html; charset=utf-8", []byte(html))
+		c.Data(200, "text/html; charset=utf-8", []byte(ssoPopup(map[string]string{"sso_id": userID})))
 		return
 	}
 	if method == "sso_get_token" {
@@ -268,15 +280,7 @@ func OIDCLoginCallback(c *gin.Context) {
 			c.Redirect(302, common.GetApiUrl(c)+"/@login?token="+token)
 			return
 		}
-		html := fmt.Sprintf(`<!DOCTYPE html>
-				<head></head>
-				<body>
-				<script>
-				window.opener.postMessage({"token":"%s"}, "*")
-				window.close()
-				</script>
-				</body>`, token)
-		c.Data(200, "text/html; charset=utf-8", []byte(html))
+		c.Data(200, "text/html; charset=utf-8", []byte(ssoPopup(map[string]string{"token": token})))
 		return
 	}
 }
@@ -347,6 +351,12 @@ func SSOLoginCallback(c *gin.Context) {
 		common.ErrorStrResp(c, "invalid platform", 400)
 		return
 	}
+	// Verify and consume the one-time state before exchanging the code, so a
+	// code replayed or CSRF'd without a matching fresh state is rejected.
+	if !verifyState(clientId, c.ClientIP(), c.Query("state")) {
+		common.ErrorStrResp(c, "incorrect or expired state parameter", 400)
+		return
+	}
 	callbackCode := c.Query(authField)
 	if callbackCode == "" {
 		common.ErrorStrResp(c, "No code provided", 400)
@@ -406,15 +416,7 @@ func SSOLoginCallback(c *gin.Context) {
 			c.Redirect(302, common.GetApiUrl(c)+"/@manage?sso_id="+userID)
 			return
 		}
-		html := fmt.Sprintf(`<!DOCTYPE html>
-				<head></head>
-				<body>
-				<script>
-				window.opener.postMessage({"sso_id": "%s"}, "*")
-				window.close()
-				</script>
-				</body>`, userID)
-		c.Data(200, "text/html; charset=utf-8", []byte(html))
+		c.Data(200, "text/html; charset=utf-8", []byte(ssoPopup(map[string]string{"sso_id": userID})))
 		return
 	}
 	username := utils.Json.Get(resp.Body(), usernameField).ToString()
@@ -435,13 +437,5 @@ func SSOLoginCallback(c *gin.Context) {
 		c.Redirect(302, common.GetApiUrl(c)+"/@login?token="+token)
 		return
 	}
-	html := fmt.Sprintf(`<!DOCTYPE html>
-							<head></head>
-							<body>
-							<script>
-							window.opener.postMessage({"token":"%s"}, "*")
-							window.close()
-							</script>
-							</body>`, token)
-	c.Data(200, "text/html; charset=utf-8", []byte(html))
+	c.Data(200, "text/html; charset=utf-8", []byte(ssoPopup(map[string]string{"token": token})))
 }
