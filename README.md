@@ -13,9 +13,15 @@
 > **本项目是 [OpenList](https://github.com/OpenListTeam/OpenList)（AList 的社区维护 fork，AGPL-3.0）的个人二次构建版本。**
 > 代码基于 OpenList 上游持续跟踪，用于个人部署与定制。上游功能、Bug 与特性请优先参考 [OpenList 官方仓库](https://github.com/OpenListTeam/OpenList)。
 
-- English | [中文](./README/README_cn.md)
 - [上游 OpenList](https://github.com/OpenListTeam/OpenList)
 - [LICENSE](./LICENSE)
+
+## 与上游的主要差异
+
+- **内置前端**：本仓库自带 `frontend/` 目录（React 19 + Vite 7 + chaos-ui 组件库），构建时本地编译到 `public/dist`，不再从上游 `OpenListTeam/OpenList-Frontend` 下载前端产物，并自动应用 `public/theme` 中的 chaos-oss 主题。
+- **S3 网关增强**：与主服务共用 `/s3` 路径，配置有效桶后自动启用；桶支持映射多个存储挂载路径并选择写入策略（任一成功 / 全部成功）；默认拒绝未认证访问（匿名访问需显式开启设置项），访问密钥支持只读、限定桶范围与 IP 白名单。
+- **安全加固**：刷新令牌一次性原子轮换；SSO state 一次性校验；WebDAV 调试日志不再输出 Bearer Token；登录限流加固；移除 OpenList 指纹信息。
+- **Docker 镜像**：CI 产出静态编译的 amd64 alpine 镜像。
 
 ## 功能特性
 
@@ -76,6 +82,7 @@
 - [x] 国际化（I18n）
 - [x] 受保护路由（密码保护与身份认证）
 - [x] WebDAV
+- [x] 内置 S3 网关（与主服务共用 `/s3` 路径）
 - [x] Docker 部署
 - [x] Cloudflare Workers 代理
 - [x] 文件/文件夹打包下载
@@ -107,11 +114,11 @@ docker run -d \
   --name chaos-oss \
   --restart unless-stopped \
   -p 5244:5244 \
-  -v ./data:/opt/data \
+  -v ./data:/opt/openlist/data \
   ghcr.io/chao2hang/chaos-oss:latest
 ```
 
-也可以使用本项目根目录下的 `docker-compose.yml` 一键启动：
+也可以使用本项目根目录下的 `docker-compose.yml` 一键启动（默认将宿主机 `/etc/chaos-oss` 挂载为容器内数据目录 `/opt/openlist/data`，可按需修改）：
 ```bash
 docker compose up -d
 ```
@@ -163,11 +170,13 @@ S3 地址： https://example.com/s3
 
 1. 进入「管理后台 → S3 网关 → 桶配置」。
 2. 新增桶名称，例如 `files`。
-3. 填写一个或多个已存在的存储挂载路径，例如 `/123`。
+3. 填写一个或多个已存在的存储挂载路径，例如 `/123`；多路径时可选写入策略：`any`（任一路径写入成功即成功，默认）或 `all`（全部路径写入成功才算成功）。
 4. 保存桶配置。保存后 `/s3` 会自动可用，不需要重启服务。
 5. 进入「管理后台 → S3 网关 → 访问密钥」创建 AccessKey/SecretKey。
 
-外部项目将 S3 Endpoint 设置为 `https://example.com/s3`，使用 AWS S3 Signature V4 即可调用。桶配置为空或无效时，`/s3` 会保持关闭状态。AccessKey/SecretKey 仍用于请求认证和权限控制。
+外部项目将 S3 Endpoint 设置为 `https://example.com/s3`，使用 AWS S3 Signature V4 即可调用。桶配置为空或无效时，`/s3` 会保持关闭状态。
+
+出于安全考虑，所有 S3 请求默认必须携带有效的 AccessKey 签名；未配置任何密钥时网关会拒绝全部请求（启动时会输出告警），匿名访问需显式开启 `s3_allow_anonymous_access` 设置。访问密钥除认证外还支持权限控制：只读密钥（禁止写入/删除）、限定可访问的桶范围、IP 白名单（CIDR / 单 IP），所有请求会记录到操作审计日志。
 
 如需兼容旧版独立端口配置，可以在 `data/config.json` 中保留 `s3.enable` 和 `s3.port`；但只要存在有效桶，当前版本会优先使用主服务的 `/s3` 路径，不启动第二个 S3 端口。
 
@@ -184,10 +193,10 @@ S3 地址： https://example.com/s3
 
 ## 构建
 
-构建脚本与上游保持一致，详细用法见 `build.sh`：
+构建脚本用法与上游一致，详细见 `build.sh`：
 
 ```bash
-# 本地 Docker 镜像（dev 版，自动拉取前端）
+# 本地 Docker 镜像（dev 版，本地构建前端）
 ./build.sh dev docker
 
 # 开发版（Linux musl amd64/arm64 + Windows/Darwin）
@@ -197,7 +206,8 @@ S3 地址： https://example.com/s3
 ./build.sh release
 ```
 
-- 前端产物在构建时自动从上游 `OpenListTeam/OpenList-Frontend` 拉取，无需手动准备。
+- 前端源码位于本仓库 `frontend/` 目录，构建时在本地编译并输出到 `public/dist`，不会从上游 `OpenListTeam/OpenList-Frontend` 下载任何前端产物。
+- 前端构建完成后会自动应用 `public/theme` 中的 chaos-oss 主题。
 - Go 版本要求：`go.mod` 声明 Go 1.26。
 - 多语言构建（Windows 7 / LoongArch 等）需要对应的交叉编译工具链，脚本会自动下载。
 

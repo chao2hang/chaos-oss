@@ -712,6 +712,7 @@ func (b *s3Backend) DeleteObject(ctx context.Context, bucketName, objectName str
 }
 
 func (b *s3Backend) deleteObject(ctx context.Context, bucketName, objectName string) error {
+	repWorker.Cancel(bucketName, objectName)
 	bucket, err := getBucketByName(bucketName)
 	if err != nil {
 		return err
@@ -731,13 +732,10 @@ func (b *s3Backend) deleteObject(ctx context.Context, bucketName, objectName str
 		go func(i int, p string) {
 			defer wg.Done()
 			fp := path.Join(p, objectName)
+			b.meta.Delete(fp)
 			fmeta, _ := op.GetNearestMeta(fp)
 			c := context.WithValue(ctx, conf.MetaKey, fmeta)
-			if _, err := fs.Get(c, fp, &fs.GetArgs{}); err != nil && !errs.IsObjectNotFound(err) {
-				results[i] = result{err: err}
-				return
-			}
-			if rmErr := fs.Remove(c, fp); rmErr != nil && !errs.IsObjectNotFound(rmErr) {
+			if rmErr := fs.Remove(c, fp); rmErr != nil && !errs.IsObjectNotFound(rmErr) && !errs.IsNotFoundError(rmErr) {
 				results[i] = result{err: rmErr}
 			}
 		}(i, p)

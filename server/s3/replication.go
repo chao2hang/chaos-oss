@@ -47,6 +47,7 @@ type pendingPut struct {
 type replicationWorker struct {
 	queue chan *pendingPut
 	wg    sync.WaitGroup
+	mu    sync.Mutex
 	stop  chan struct{}
 	once  sync.Once
 }
@@ -85,6 +86,25 @@ func (w *replicationWorker) Stop() {
 // pending (observability).
 func ReplicationQueueDepth() int {
 	return len(repWorker.queue)
+}
+
+func (w *replicationWorker) Cancel(bucket, object string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	// Drain matching items from queue
+	n := len(w.queue)
+	for i := 0; i < n; i++ {
+		select {
+		case p := <-w.queue:
+			if p.bucket == bucket && p.object == object {
+				_ = os.Remove(p.cachedFile)
+			} else {
+				w.queue <- p
+			}
+		default:
+			break
+		}
+	}
 }
 
 func (w *replicationWorker) Enqueue(p *pendingPut) {
