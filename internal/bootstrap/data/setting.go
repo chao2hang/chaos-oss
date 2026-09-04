@@ -228,6 +228,7 @@ func InitialSettings() []model.SettingItem {
 		{Key: conf.S3AccessKeyId, Value: "", Type: conf.TypeString, Group: model.S3, Flag: model.PRIVATE},
 		{Key: conf.S3SecretAccessKey, Value: "", Type: conf.TypeString, Group: model.S3, Flag: model.PRIVATE},
 		{Key: conf.S3Buckets, Value: "[]", Type: conf.TypeString, Group: model.S3, Flag: model.PRIVATE},
+		{Key: conf.S3AllowAnonymousAccess, Value: "false", Type: conf.TypeBool, Group: model.S3, Flag: model.PRIVATE, Help: `Allow unauthenticated S3 access ONLY when no access key is configured. Disabled by default; enabling it exposes the gateway anonymously.`},
 		{Key: conf.S3ReplicationDefaultPolicy, Value: "any", Type: conf.TypeSelect, Group: model.S3, Flag: model.PUBLIC, Options: `["any","all"]`},
 		{Key: conf.S3ReplicationGraceSeconds, Value: "30", Type: conf.TypeNumber, Group: model.S3, Flag: model.PUBLIC},
 

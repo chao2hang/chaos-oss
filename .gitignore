@@ -24,6 +24,8 @@ output/
 *.json
 !public/theme/manifest-fragment.json
 !renovate.json
+!frontend/package.json
+!frontend/tsconfig.json
 /build
 /data/
 /tmp/

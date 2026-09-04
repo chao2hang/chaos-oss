@@ -3,6 +3,7 @@
 package s3
 
 import (
+	"encoding/xml"
 	"net"
 	"net/http"
 	"strings"
@@ -107,6 +108,7 @@ func seedLegacyKey() {
 func InitS3Keys(stop <-chan struct{}) {
 	seedLegacyKey()
 	s3KeyStore.load()
+	warnNoKeys()
 	go func() {
 		t := time.NewTicker(60 * time.Second)
 		defer t.Stop()
@@ -119,6 +121,22 @@ func InitS3Keys(stop <-chan struct{}) {
 			}
 		}
 	}()
+}
+
+// warnNoKeys emits a high-priority startup warning when no S3 access
+// key is configured, so administrators cannot silently run an open
+// gateway.
+func warnNoKeys() {
+	if s3KeyStore.size() > 0 {
+		return
+	}
+	if setting.GetBool(conf.S3AllowAnonymousAccess) {
+		log.Warnf("s3: no access keys configured and anonymous access is ENABLED; " +
+			"the S3 gateway accepts unauthenticated requests")
+		return
+	}
+	log.Errorf("s3: no access keys configured; the S3 gateway rejects all requests " +
+		"until an access key is created or anonymous access is explicitly enabled")
 }
 
 // accessKeyFromRequest extracts the access key id from the V4/V2
@@ -200,12 +218,23 @@ func bucketFromPath(p string) (string, bool) {
 	return p, true
 }
 
-// s3Error writes a minimal S3 XML error response.
+// s3XMLError is the S3 wire format for error responses.
+type s3XMLError struct {
+	XMLName xml.Name `xml:"Error"`
+	Code    string   `xml:"Code"`
+	Message string   `xml:"Message"`
+}
+
+// s3Error writes a minimal S3 XML error response. Code and message are
+// escaped by encoding/xml, so responses stay well-formed and safe even
+// if they contain XML special characters.
 func s3Error(w http.ResponseWriter, code, message string, status int) {
 	w.Header().Set("Content-Type", "application/xml")
 	w.WriteHeader(status)
-	_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?><Error><Code>` +
-		code + `</Code><Message>` + message + `</Message></Error>`))
+	_, _ = w.Write([]byte(xml.Header))
+	if err := xml.NewEncoder(w).Encode(s3XMLError{Code: code, Message: message}); err != nil {
+		log.Errorf("s3: failed to encode error response: %+v", err)
+	}
 }
 
 // deny writes the error response and records audit + metrics for the
@@ -222,8 +251,15 @@ func gatekeeper(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 
-		// no keys configured at all -> behave as before (open or legacy)
-		if s3KeyStore.size() > 0 {
+		// No keys configured: deny by default so the gateway can never
+		// be open by accident. Anonymous access requires an explicit
+		// opt-in via the s3_allow_anonymous_access setting.
+		if s3KeyStore.size() == 0 {
+			if !setting.GetBool(conf.S3AllowAnonymousAccess) {
+				deny(w, r, "", "no S3 access keys are configured", start)
+				return
+			}
+		} else {
 			ak := accessKeyFromRequest(r)
 			key, ok := s3KeyStore.lookup(ak)
 			if !ok {

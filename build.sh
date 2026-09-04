@@ -113,6 +113,7 @@ FetchWebRelease() {
 # 1 when we should fall back to downloading the upstream dist.
 BuildWebLocal() {
   if [ ! -f frontend/package.json ]; then
+    echo "error: frontend/package.json not found; the local frontend cannot be built" >&2
     return 1
   fi
   echo "building local frontend (frontend/)..."

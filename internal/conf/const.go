@@ -134,6 +134,7 @@ const (
 	S3Buckets                  = "s3_buckets"
 	S3AccessKeyId              = "s3_access_key_id"
 	S3SecretAccessKey          = "s3_secret_access_key"
+	S3AllowAnonymousAccess     = "s3_allow_anonymous_access"     // bool; explicit opt-in for unauthenticated access when no keys exist
 	S3ReplicationDefaultPolicy = "s3_replication_default_policy" // "any" or "all"
 	S3ReplicationGraceSeconds  = "s3_replication_grace_seconds"  // background retry grace window
 
