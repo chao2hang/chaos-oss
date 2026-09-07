@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/OpenListTeam/go-cache"
@@ -30,27 +31,40 @@ import (
 const stateLength = 16
 const stateExpire = time.Minute * 5
 
-var stateCache = cache.NewMemCache[string](cache.WithShards[string](stateLength))
+// ssoStateValue stores IP and method so we can verify the state was issued for
+// the same SSO method that is consuming it (prevents cross-method replay).
+type ssoStateValue struct {
+	ip     string
+	method string
+}
+
+var stateCache = cache.NewMemCache[ssoStateValue](cache.WithShards[ssoStateValue](stateLength))
+var ssoStateMu sync.Mutex
 
 func _keyState(clientID, state string) string {
 	return fmt.Sprintf("%s_%s", clientID, state)
 }
 
-func generateState(clientID, ip string) string {
+func generateState(clientID, ip, method string) string {
+	ssoStateMu.Lock()
+	defer ssoStateMu.Unlock()
 	state := random.String(stateLength)
-	stateCache.Set(_keyState(clientID, state), ip, cache.WithEx[string](stateExpire))
+	stateCache.Set(_keyState(clientID, state), ssoStateValue{ip: ip, method: method}, cache.WithEx[ssoStateValue](stateExpire))
 	return state
 }
 
 // verifyState validates an SSO state and consumes it in one step, so a given
 // state can only be used once. This blocks replay and login-CSRF: an attacker
 // cannot reuse a captured state, and an empty/unknown state is rejected.
-func verifyState(clientID, ip, state string) bool {
+// The method must match the one used when the state was generated.
+func verifyState(clientID, ip, state, method string) bool {
 	if state == "" {
 		return false
 	}
+	ssoStateMu.Lock()
+	defer ssoStateMu.Unlock()
 	value, ok := stateCache.GetDel(_keyState(clientID, state))
-	return ok && value == ip
+	return ok && value.ip == ip && value.method == method
 }
 
 func ssoRedirectUri(c *gin.Context, useCompatibility bool, method string) string {
@@ -84,7 +98,7 @@ func SSOLoginRedirect(c *gin.Context) {
 	// A random, one-time state is sent to every provider and must be echoed
 	// back on the callback; this is what prevents login-CSRF across all SSO
 	// platforms (not just OIDC).
-	state := generateState(clientId, c.ClientIP())
+	state := generateState(clientId, c.ClientIP(), method)
 	urlValues.Add("state", state)
 	switch platform {
 	case "Github":
@@ -221,7 +235,7 @@ func OIDCLoginCallback(c *gin.Context) {
 		common.ErrorResp(c, err, 400)
 		return
 	}
-	if !verifyState(clientId, c.ClientIP(), c.Query("state")) {
+	if !verifyState(clientId, c.ClientIP(), c.Query("state"), method) {
 		common.ErrorStrResp(c, "incorrect or expired state parameter", 400)
 		return
 	}
@@ -353,7 +367,7 @@ func SSOLoginCallback(c *gin.Context) {
 	}
 	// Verify and consume the one-time state before exchanging the code, so a
 	// code replayed or CSRF'd without a matching fresh state is rejected.
-	if !verifyState(clientId, c.ClientIP(), c.Query("state")) {
+	if !verifyState(clientId, c.ClientIP(), c.Query("state"), argument) {
 		common.ErrorStrResp(c, "incorrect or expired state parameter", 400)
 		return
 	}

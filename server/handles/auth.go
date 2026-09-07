@@ -12,6 +12,7 @@ import (
 	"github.com/OpenListTeam/OpenList/v4/server/common"
 	"github.com/gin-gonic/gin"
 	"github.com/pquerna/otp/totp"
+	log "github.com/sirupsen/logrus"
 )
 
 type LoginReq struct {
@@ -116,6 +117,14 @@ func RefreshToken(c *gin.Context) {
 	user, err := op.GetUserByName(claims.Username)
 	if err != nil {
 		common.ErrorStrResp(c, "user no longer exists", 401)
+		return
+	}
+	if user.Disabled {
+		common.ErrorStrResp(c, "user is disabled", 401)
+		return
+	}
+	if user.IsGuest() {
+		common.ErrorStrResp(c, "guest cannot refresh tokens", 401)
 		return
 	}
 	// password changed since the refresh token was issued → force re-login
@@ -260,6 +269,8 @@ func LogOut(c *gin.Context) {
 		if req.RefreshToken != "" {
 			_ = common.InvalidateToken(req.RefreshToken)
 		}
+	} else if c.Request.Method == http.MethodGet {
+		log.Warn("GET /api/auth/logout cannot carry a refresh token; the refresh token remains valid until it expires. Clients should use POST with a JSON body containing the refresh_token.")
 	}
 	common.SuccessResp(c)
 }

@@ -3,6 +3,7 @@ package common
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"sync"
 	"time"
 
 	"github.com/OpenListTeam/OpenList/v4/internal/conf"
@@ -147,13 +148,13 @@ func ParseRefreshToken(tokenString string) (*UserClaims, error) {
 	return claims, nil
 }
 
-// ConsumeRefreshToken atomically marks a refresh token as used and reports
-// whether this call was the one that consumed it. Because the consume is a
-// single GetDel, a refresh token presented concurrently — for example a stolen
-// token raced against the legitimate client — can only be exchanged once; the
-// loser observes ok == false. Callers must already have validated the token
-// with ParseRefreshToken.
+var consumeMu sync.Mutex
+
+// ConsumeRefreshToken atomically marks a refresh token as used. Returns
+// true exactly once per token; concurrent or subsequent calls return false.
 func ConsumeRefreshToken(tokenString string) bool {
+	consumeMu.Lock()
+	defer consumeMu.Unlock()
 	_, ok := validTokenCache.GetDel(tokenString)
 	return ok
 }

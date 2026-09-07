@@ -51,7 +51,7 @@ func (ks *keyStore) load() {
 	ks.mu.Lock()
 	ks.keys = m
 	ks.mu.Unlock()
-	signature.StoreKeys(pairs)
+	signature.ReloadKeys(pairs)
 }
 
 // lookup resolves an access key id to its record.
@@ -242,7 +242,13 @@ func s3Error(w http.ResponseWriter, code, message string, status int) {
 func deny(w http.ResponseWriter, r *http.Request, ak, message string, start time.Time) {
 	s3Error(w, "AccessDenied", message, http.StatusForbidden)
 	recordAudit(r, ak, http.StatusForbidden, 0, start)
-	s3Metrics.observe(r.Method, http.StatusForbidden, 0, time.Since(start), ak)
+	// Use a constant label for rejected requests to prevent unbounded
+	// Prometheus cardinality from attacker-controlled access key ids.
+	metricsKey := ak
+	if _, known := s3KeyStore.lookup(ak); !known {
+		metricsKey = "invalid"
+	}
+	s3Metrics.observe(r.Method, http.StatusForbidden, 0, time.Since(start), metricsKey)
 }
 
 // gatekeeper enforces per-key permissions and records audit + metrics.
@@ -266,12 +272,27 @@ func gatekeeper(next http.Handler) http.Handler {
 				deny(w, r, ak, "invalid access key id", start)
 				return
 			}
+			// Verify the request signature using the credential store.
+			sigResult := signature.V4SignVerify(r)
+			if sigResult == signature.ErrUnsupportAlgorithm {
+				sigResult = signature.V2SignVerify(r)
+			}
+			if sigResult != signature.ErrNone {
+				deny(w, r, ak, "signature verification failed", start)
+				return
+			}
 			clientIP := clientIPFromRequest(r)
 			if !ipAllowed(key.IPAllowlist, clientIP) {
 				deny(w, r, ak, "source IP not allowed for this key", start)
 				return
 			}
 			if bucket, hasBucket := bucketFromPath(r.URL.Path); hasBucket {
+				// Reject path traversal attempts.
+				trimmed := strings.TrimPrefix(r.URL.Path, "/"+bucket+"/")
+				if hasDotSegment(trimmed) {
+					deny(w, r, ak, "path traversal is not allowed", start)
+					return
+				}
 				if !key.AllowsBucket(bucket) {
 					deny(w, r, ak, "key is not authorized for bucket "+bucket, start)
 					return
@@ -341,4 +362,15 @@ func clientIPFromRequest(r *http.Request) string {
 		return r.RemoteAddr
 	}
 	return host
+}
+
+// hasDotSegment reports whether the path contains ".." segments that
+// could escape the bucket root via path.Join resolution.
+func hasDotSegment(objectName string) bool {
+	for _, seg := range strings.Split(objectName, "/") {
+		if seg == ".." {
+			return true
+		}
+	}
+	return false
 }

@@ -3,6 +3,7 @@ package op
 import (
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/OpenListTeam/OpenList/v4/internal/db"
@@ -60,7 +61,9 @@ func TouchS3AccessKey(id uint) {
 	touchAt.Store(id, now)
 	s3KeyMu.Lock()
 	defer s3KeyMu.Unlock()
-	_ = db.TouchS3AccessKey(id, now)
+	if err := db.TouchS3AccessKey(id, now); err != nil {
+		log.Warnf("s3: failed to touch key %d: %v", id, err)
+	}
 }
 
 // ---------------------------- audit ----------------------------
@@ -70,6 +73,7 @@ const S3AuditRetentionDays = 90
 
 var auditQueue = make(chan *model.S3AuditLog, 1024)
 var auditOnce sync.Once
+var auditDropped atomic.Int64
 
 // LogS3Audit queues an audit record for asynchronous persistence.
 // Never blocks the request path: a full queue drops the record.
@@ -77,6 +81,9 @@ func LogS3Audit(rec *model.S3AuditLog) {
 	select {
 	case auditQueue <- rec:
 	default:
+		if n := auditDropped.Add(1); n == 1 || n%1000 == 0 {
+			log.Warnf("s3 audit: queue full, dropped %d records total", n)
+		}
 	}
 }
 

@@ -26,6 +26,7 @@ import {
   LockIcon,
 } from 'lucide-react'
 import { fsList, fsGet } from '../api/fs'
+import { safeOpen } from '../lib/safeOpen'
 import { getPublicSettings } from '../api/public'
 import { parsePreviewSettings, matchPreview } from '../lib/preview'
 import { formatBytes, formatTime, joinPath } from '../lib/format'
@@ -99,7 +100,7 @@ export default function Share() {
       try {
         const info = await fsGet(`/@s${sid}${p}`, pwd)
         if (info.raw_url) {
-          window.open(info.raw_url, '_blank')
+          safeOpen(info.raw_url)
           return true
         }
       } catch {
@@ -244,7 +245,7 @@ export default function Share() {
                     {t('预览')}
                   </Button>
                 )}
-                <Button onClick={() => singleFile.raw_url && window.open(singleFile.raw_url, '_blank')}>
+                <Button onClick={() => safeOpen(singleFile.raw_url)}>
                   <DownloadIcon className="mr-1.5 h-4 w-4" />
                   {t('下载文件')}
                 </Button>

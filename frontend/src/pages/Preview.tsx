@@ -16,6 +16,7 @@ import {
 import { fsGet, fsList } from '../api/fs'
 import { getPublicSettings } from '../api/public'
 import { downloadUrl, proxyUrl } from '../api/client'
+import { safeOpen } from '../lib/safeOpen'
 import { parsePreviewSettings, matchPreview, buildViewerUrl, ext, type PreviewSettings } from '../lib/preview'
 import { formatBytes, joinPath } from '../lib/format'
 import VideoPlayer from '../components/VideoPlayer'
@@ -163,7 +164,7 @@ export default function Preview() {
                 variant="ghost"
                 size="icon"
                 title={t("在新窗口打开")}
-                onClick={() => window.open(eUrl, '_blank')}
+                onClick={() => safeOpen(eUrl)}
               >
                 <ExternalLinkIcon className="h-4 w-4" />
               </Button>
@@ -171,7 +172,7 @@ export default function Preview() {
                 variant="ghost"
                 size="icon"
                 title={t("下载")}
-                onClick={() => window.open(dlUrl, '_blank')}
+                onClick={() => window.open(dlUrl, '_blank', 'noopener,noreferrer')}
               >
                 <DownloadIcon className="h-4 w-4" />
               </Button>
@@ -197,7 +198,7 @@ export default function Preview() {
             title={t("不支持预览")}
             description="此文件类型没有配置预览方式，可直接下载"
             action={
-              <Button onClick={() => window.open(dlUrl, '_blank')}>
+              <Button onClick={() => window.open(dlUrl, '_blank', 'noopener,noreferrer')}>
                 <DownloadIcon className="mr-1.5 h-4 w-4" />
                 {t('下载')}
               </Button>

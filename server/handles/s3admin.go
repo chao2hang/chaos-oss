@@ -25,13 +25,13 @@ func randomKeyString(n int) string {
 }
 
 type s3KeyReq struct {
-	AccessKey   string `json:"access_key"`
-	SecretKey   string `json:"secret_key"`
-	Buckets     string `json:"buckets"`
-	ReadOnly    bool   `json:"read_only"`
-	Enabled     *bool  `json:"enabled"`
-	IPAllowlist string `json:"ip_allowlist"`
-	Remark      string `json:"remark"`
+	AccessKey   string  `json:"access_key"`
+	SecretKey   string  `json:"secret_key"`
+	Buckets     *string `json:"buckets"`
+	ReadOnly    *bool   `json:"read_only"`
+	Enabled     *bool   `json:"enabled"`
+	IPAllowlist *string `json:"ip_allowlist"`
+	Remark      string  `json:"remark"`
 }
 
 // ListS3Keys returns all S3 access keys.
@@ -62,13 +62,25 @@ func CreateS3Key(c *gin.Context) {
 	if req.Enabled != nil {
 		enabled = *req.Enabled
 	}
+	buckets := ""
+	if req.Buckets != nil {
+		buckets = *req.Buckets
+	}
+	readOnly := false
+	if req.ReadOnly != nil {
+		readOnly = *req.ReadOnly
+	}
+	ipAllowlist := ""
+	if req.IPAllowlist != nil {
+		ipAllowlist = *req.IPAllowlist
+	}
 	key := &model.S3AccessKey{
 		AccessKey:   req.AccessKey,
 		SecretKey:   req.SecretKey,
-		Buckets:     req.Buckets,
-		ReadOnly:    req.ReadOnly,
+		Buckets:     buckets,
+		ReadOnly:    readOnly,
 		Enabled:     enabled,
-		IPAllowlist: req.IPAllowlist,
+		IPAllowlist: ipAllowlist,
 		Remark:      req.Remark,
 		CreatedTime: time.Now(),
 	}
@@ -102,9 +114,15 @@ func UpdateS3Key(c *gin.Context) {
 		common.ErrorResp(c, err, 404)
 		return
 	}
-	key.Buckets = req.Buckets
-	key.ReadOnly = req.ReadOnly
-	key.IPAllowlist = req.IPAllowlist
+	if req.Buckets != nil {
+		key.Buckets = *req.Buckets
+	}
+	if req.ReadOnly != nil {
+		key.ReadOnly = *req.ReadOnly
+	}
+	if req.IPAllowlist != nil {
+		key.IPAllowlist = *req.IPAllowlist
+	}
 	key.Remark = req.Remark
 	if req.Enabled != nil {
 		key.Enabled = *req.Enabled

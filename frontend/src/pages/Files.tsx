@@ -310,7 +310,7 @@ export default function Files() {
     }
     // download needs a sign — resolve it first
     fsGet(fullPath)
-      .then((info) => window.open(downloadUrl(fullPath, info.sign), '_blank'))
+      .then((info) => window.open(downloadUrl(fullPath, info.sign), '_blank', 'noopener,noreferrer'))
       .catch((e) => message.error(e instanceof Error ? e.message : t('打开失败')))
   }
 
@@ -408,7 +408,7 @@ export default function Files() {
     if (state.obj) {
       const obj = state.obj
       const download = () =>
-        window.open(downloadUrl(joinPath(path, obj.name), obj.sign), '_blank')
+        window.open(downloadUrl(joinPath(path, obj.name), obj.sign), '_blank', 'noopener,noreferrer')
       const items: CtxItem[] = []
       if (!obj.is_dir && isPreviewable(obj)) {
         items.push({
@@ -1066,6 +1066,7 @@ export default function Files() {
                       window.open(
                         downloadUrl(joinPath(path, obj.name), obj.sign),
                         '_blank',
+                        'noopener,noreferrer',
                       )
                     }}
                     className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
@@ -1139,6 +1140,7 @@ export default function Files() {
                             window.open(
                               downloadUrl(joinPath(path, obj.name), obj.sign),
                               '_blank',
+                              'noopener,noreferrer',
                             )
                           }}
                           title={t("下载")}

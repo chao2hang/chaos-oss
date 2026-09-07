@@ -41,7 +41,7 @@ func DeleteS3AccessKey(id uint) error {
 
 func TouchS3AccessKey(id uint, t time.Time) error {
 	return errors.WithStack(db.Model(&model.S3AccessKey{}).Where("id = ?", id).
-		Update("last_used_time", t).Error)
+		Update("last_used", t).Error)
 }
 
 func InsertS3AuditLogs(logs []*model.S3AuditLog) error {

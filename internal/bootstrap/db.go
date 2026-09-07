@@ -50,6 +50,13 @@ func backupSQLite() {
 		log.Warnf("backup: failed to write: %v", err)
 		return
 	}
+	// Copy WAL and SHM sidecar files for a consistent backup.
+	for _, suffix := range []string{"-wal", "-shm"} {
+		src := dbFile + suffix
+		if data, err := os.ReadFile(src); err == nil {
+			_ = os.WriteFile(dst+suffix, data, 0o600)
+		}
+	}
 	// prune: keep the newest 7 snapshots
 	entries, _ := filepath.Glob(filepath.Join(backupDir, "data-*.db"))
 	if len(entries) > 7 {

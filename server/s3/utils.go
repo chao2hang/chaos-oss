@@ -61,7 +61,11 @@ type Bucket struct {
 // without affecting the original.
 func (b Bucket) normalized() Bucket {
 	if b.Policy == "" {
-		b.Policy = PolicyAny
+		if v := setting.GetStr(conf.S3ReplicationDefaultPolicy); v != "" {
+			b.Policy = v
+		} else {
+			b.Policy = PolicyAny
+		}
 	}
 	if len(b.Paths) == 0 && b.Path != "" {
 		b.Paths = []string{b.Path}
@@ -262,17 +266,6 @@ func prefixParser(p *gofakes3.Prefix) (path, remaining string) {
 		return "", p.Prefix
 	}
 	return p.Prefix[:idx], p.Prefix[idx+1:]
-}
-
-func authlistResolver() map[string]string {
-	s3accesskeyid := setting.GetStr(conf.S3AccessKeyId)
-	s3secretaccesskey := setting.GetStr(conf.S3SecretAccessKey)
-	if s3accesskeyid == "" && s3secretaccesskey == "" {
-		return nil
-	}
-	authList := make(map[string]string)
-	authList[s3accesskeyid] = s3secretaccesskey
-	return authList
 }
 
 // probeRegistry keeps the per-bucket probe state across requests.

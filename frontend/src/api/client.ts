@@ -264,14 +264,14 @@ export async function staticHash(password: string): Promise<string> {
 
 /** Build a download URL for an object (path-sign aware). */
 export function downloadUrl(path: string, sign?: string): string {
-  const p = path.startsWith('/') ? path : `/${path}`
+  const p = '/' + path.split('/').filter(Boolean).map(encodeURIComponent).join('/')
   const s = sign ? `?sign=${encodeURIComponent(sign)}` : ''
   return `${basePath()}/d${p}${s}`
 }
 
 /** Proxy (same-origin stream) URL — useful for previews. */
 export function proxyUrl(path: string, sign?: string): string {
-  const p = path.startsWith('/') ? path : `/${path}`
+  const p = '/' + path.split('/').filter(Boolean).map(encodeURIComponent).join('/')
   const s = sign ? `?sign=${encodeURIComponent(sign)}` : ''
   return `${basePath()}/p${p}${s}`
 }

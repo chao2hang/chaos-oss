@@ -93,6 +93,7 @@ func (w *replicationWorker) Cancel(bucket, object string) {
 	defer w.mu.Unlock()
 	// Drain matching items from queue
 	n := len(w.queue)
+drain:
 	for i := 0; i < n; i++ {
 		select {
 		case p := <-w.queue:
@@ -102,7 +103,7 @@ func (w *replicationWorker) Cancel(bucket, object string) {
 				w.queue <- p
 			}
 		default:
-			break
+			break drain
 		}
 	}
 }

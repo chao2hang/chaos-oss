@@ -34,11 +34,22 @@ func ipRateLimit(limiter *ipRateLimiter, message string, burst int) gin.HandlerF
 	return func(c *gin.Context) {
 		limiter.mu.Lock()
 		now := time.Now()
+		// Hard-evict stale entries when the map grows too large.
 		if len(limiter.visitors) > 10000 {
 			for ip, ts := range limiter.lastSeen {
 				if now.Sub(ts) > 10*time.Minute {
 					delete(limiter.visitors, ip)
 					delete(limiter.lastSeen, ip)
+				}
+			}
+			// If still too large after age-based eviction, drop oldest entries.
+			if len(limiter.visitors) > 10000 {
+				for ip := range limiter.visitors {
+					delete(limiter.visitors, ip)
+					delete(limiter.lastSeen, ip)
+					if len(limiter.visitors) <= 5000 {
+						break
+					}
 				}
 			}
 		}

@@ -86,7 +86,9 @@ function basePathSafe(): string {
 
 /** Direct download link for an object inside a share. */
 export function shareDownloadUrl(sid: string, relPath: string, pwd?: string): string {
-  const p = relPath === '/' ? '' : relPath.startsWith('/') ? relPath : `/${relPath}`
+  const p = relPath === '/'
+    ? ''
+    : '/' + relPath.split('/').filter(Boolean).map(encodeURIComponent).join('/')
   const q = pwd ? `?pwd=${encodeURIComponent(pwd)}` : ''
-  return `${basePathSafe()}/sd/${sid}${p}${q}`
+  return `${basePathSafe()}/sd/${encodeURIComponent(sid)}${p}${q}`
 }

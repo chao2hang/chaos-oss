@@ -381,7 +381,7 @@ func (b *s3Backend) PutObject(
 	if isDir {
 		// For directories we don't have a body to buffer, so we issue a
 		// mkdir on every path concurrently. Any success is enough.
-		return result, fanOutMkdir(ctx, paths, path.Join(paths[0], objectName))
+		return result, fanOutMkdir(ctx, paths, objectName)
 	}
 
 	// Ignore system files early; no need to buffer the body.
@@ -419,6 +419,13 @@ func (b *s3Backend) PutObject(
 	}
 	if allFailed {
 		return result, fmt.Errorf("all %d replication targets failed: %s", len(paths), firstErr(results).Error())
+	}
+
+	// Enforce policy=all: every path must succeed.
+	if policy == PolicyAll {
+		if fe := firstErr(results); fe != nil {
+			return result, fmt.Errorf("policy %q requires all paths to succeed: %s", PolicyAll, fe.Error())
+		}
 	}
 
 	// If policy=any, hand the still-failed paths to the background
@@ -847,7 +854,11 @@ func (b *s3Backend) CopyObject(ctx context.Context, srcBucket, srcKey, dstBucket
 	if err != nil {
 		return result, err
 	}
-	defer os.Remove(cachePath)
+	defer func() {
+		if cachePath != "" {
+			os.Remove(cachePath)
+		}
+	}()
 
 	// Build the same fan-out the PutObject path would build, but skip
 	// the cache step (we already cached to disk).
@@ -866,6 +877,13 @@ func (b *s3Backend) CopyObject(ctx context.Context, srcBucket, srcKey, dstBucket
 	}
 	if allFailed {
 		return result, fmt.Errorf("all %d replication targets failed: %s", len(paths), firstErr(results).Error())
+	}
+
+	// Enforce policy=all: every path must succeed.
+	if dstB.writePolicy() == PolicyAll {
+		if fe := firstErr(results); fe != nil {
+			return result, fmt.Errorf("policy %q requires all paths to succeed: %s", PolicyAll, fe.Error())
+		}
 	}
 
 	if dstB.writePolicy() == PolicyAny {

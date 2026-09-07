@@ -98,7 +98,7 @@ export default function Archive() {
       return
     }
     if (!meta.data) return
-    window.open(archiveExtractUrl(meta.data, joinPath(inner, obj.name), archivePass), '_blank')
+    window.open(archiveExtractUrl(meta.data, joinPath(inner, obj.name), archivePass), '_blank', 'noopener,noreferrer')
   }
 
   const doDecompress = async (dstDir: string) => {
@@ -133,7 +133,7 @@ export default function Archive() {
               variant="ghost"
               size="icon"
               title={t("下载整个压缩包")}
-              onClick={() => window.open(downloadUrl(path), '_blank')}
+              onClick={() => window.open(downloadUrl(path), '_blank', 'noopener,noreferrer')}
             >
               <DownloadIcon className="h-4 w-4" />
             </Button>
@@ -274,6 +274,7 @@ export default function Archive() {
                               window.open(
                                 archiveExtractUrl(meta.data!, joinPath(inner, obj.name), archivePass),
                                 '_blank',
+                                'noopener,noreferrer',
                               )
                             }}
                           >

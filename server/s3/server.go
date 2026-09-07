@@ -13,20 +13,19 @@ import (
 // Make a new S3 Server to serve the remote
 func NewServer(ctx context.Context) (h http.Handler, err error) {
 	var newLogger logger
-	authPairs := authlistResolver()
 	faker := gofakes3.New(
 		newBackend(),
 		// gofakes3.WithHostBucket(!opt.pathBucketMode),
 		gofakes3.WithLogger(newLogger),
 		gofakes3.WithRequestID(rand.Uint64()),
 		gofakes3.WithoutVersioning(),
-		gofakes3.WithV4Auth(authPairs),
+		gofakes3.WithV4Auth(nil),
 		gofakes3.WithIntegrityCheck(true), // Check Content-MD5 if supplied
 	)
 
 	// gatekeeper: per-key permissions + audit + metrics, wrapping the
 	// redirect handler (so direct-link redirects are policed too)
-	return gatekeeper(redirectHandler(faker.Server(), authPairs)), nil
+	return gatekeeper(redirectHandler(faker.Server())), nil
 }
 
 // Stats returns a snapshot of the S3 gateway counters (admin API).

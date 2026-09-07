@@ -17,16 +17,16 @@ import (
 	"github.com/itsHenry35/gofakes3/signature"
 )
 
-func redirectHandler(next http.Handler, authPairs map[string]string) http.Handler {
+func redirectHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if u, ok := directObjectURL(r, authPairs); ok {
+		if u, ok := directObjectURL(r); ok {
 			w.Header().Set("Referrer-Policy", "no-referrer")
 			w.Header().Set("Cache-Control", "max-age=0, no-cache, no-store, must-revalidate")
 			w.Header().Set("Location", u)
 			w.WriteHeader(http.StatusFound)
 			return
 		}
-		if u, ok := directUploadURL(r, authPairs); ok {
+		if u, ok := directUploadURL(r); ok {
 			w.Header().Set("Referrer-Policy", "no-referrer")
 			w.Header().Set("Location", u)
 			w.Header().Set("Cache-Control", "no-store")
@@ -41,11 +41,11 @@ func redirectHandler(next http.Handler, authPairs map[string]string) http.Handle
 // the bucket's underlying storage paths can hand back a direct link to
 // the object. We try the lowest-latency path first (per the probe cache)
 // and fall through to the rest until one works.
-func directObjectURL(r *http.Request, authPairs map[string]string) (string, bool) {
+func directObjectURL(r *http.Request) (string, bool) {
 	if r.Method != http.MethodGet {
 		return "", false
 	}
-	if hasNonObjectQuery(r) || !s3RequestAuthorized(r, authPairs) {
+	if hasNonObjectQuery(r) || !s3RequestAuthorized(r) {
 		return "", false
 	}
 	bucketName, objectName, ok := parseObjectPath(r.URL.Path)
@@ -90,11 +90,11 @@ func directObjectURL(r *http.Request, authPairs map[string]string) (string, bool
 // in the background once chaos-oss sees the new file via the storage's
 // own post-upload hook). If no path supports direct upload we return
 // false so the request falls through to the streaming upload path.
-func directUploadURL(r *http.Request, authPairs map[string]string) (string, bool) {
+func directUploadURL(r *http.Request) (string, bool) {
 	if r.Method != http.MethodPut || r.ContentLength < 0 {
 		return "", false
 	}
-	if hasNonObjectQuery(r) || !s3RequestAuthorized(r, authPairs) {
+	if hasNonObjectQuery(r) || !s3RequestAuthorized(r) {
 		return "", false
 	}
 	if r.Header.Get("X-Amz-Copy-Source") != "" ||
@@ -174,8 +174,8 @@ func hasNonObjectQuery(r *http.Request) bool {
 	return false
 }
 
-func s3RequestAuthorized(r *http.Request, authPairs map[string]string) bool {
-	if len(authPairs) == 0 {
+func s3RequestAuthorized(r *http.Request) bool {
+	if s3KeyStore.size() == 0 {
 		return true
 	}
 	result := signature.V4SignVerify(r)
