@@ -223,7 +223,12 @@ func Start() {
 			}
 		}()
 	}
-	if !s3server.HasConfiguredBuckets() && conf.Conf.S3.Port != -1 && conf.Conf.S3.Enable {
+	// Optional standalone S3 port: serves the same gateway (and the same
+	// bucket / key configuration) as the main-port /s3 route, but mounted
+	// at the root, so standard S3 clients can use a path-free endpoint
+	// (scheme://host:port) with regular SigV4 signing. The main-port /s3
+	// route stays available either way.
+	if conf.Conf.S3.Port != -1 && conf.Conf.S3.Enable {
 		s3r := gin.New()
 		configureTrustedProxies(s3r)
 		s3r.Use(gin.LoggerWithWriter(log.StandardLogger().Out), gin.RecoveryWithWriter(log.StandardLogger().Out))
