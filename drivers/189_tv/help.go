@@ -72,9 +72,23 @@ func (t *Time) UnmarshalXML(e *xml.Decoder, ee xml.StartElement) error {
 }
 func (t *Time) Unmarshal(b []byte) error {
 	bs := strings.Trim(string(b), "\"")
+	// Some 189cloud endpoints separate the time from the AM/PM marker
+	// with a Unicode narrow no-break space (U+202F) or a no-break space
+	// (U+00A0) instead of a plain space; normalize before matching.
+	bs = strings.ReplaceAll(bs, "\u202f", " ")
+	bs = strings.ReplaceAll(bs, "\u00a0", " ")
 	var v time.Time
 	var err error
-	for _, f := range []string{"2006-01-02 15:04:05 -07", "Jan 2, 2006 15:04:05 PM -07"} {
+	// The "15" hour layout also matches 12-hour values ("3:45:49 PM"
+	// parses to 15:45:49) because Go applies the AM/PM marker after
+	// parsing the hour.
+	for _, f := range []string{
+		"2006-01-02 15:04:05 -07",
+		"Jan 2, 2006 15:04:05 PM -07",
+		// The API also emits a comma after the year:
+		// "Sep 10, 2026, 3:45:49 PM".
+		"Jan 2, 2006, 15:04:05 PM -07",
+	} {
 		v, err = time.ParseInLocation(f, bs+" +08", time.Local)
 		if err == nil {
 			break
