@@ -573,7 +573,12 @@ func putOnePath(
 
 	reqPath := path.Dir(fp)
 	if _, err := fs.Get(ctx, reqPath, &fs.GetArgs{}); err != nil {
-		if errs.IsObjectNotFound(err) && strings.Contains(objectName, "/") {
+		if errs.IsObjectNotFound(err) {
+			// Parent missing (including the bucket's own mount root for
+			// first-level objects): op.MakeDir creates the whole chain
+			// recursively, so a PUT into a not-yet-materialized directory
+			// succeeds just like it would on real S3. This mirrors the
+			// replication worker's behavior in server/s3/replication.go.
 			if mkErr := fs.MakeDir(ctx, reqPath); mkErr != nil {
 				return pkgerrors.WithMessagef(mkErr, "failed to makeDir, reqPath: %s", reqPath)
 			}
