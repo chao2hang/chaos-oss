@@ -5,6 +5,7 @@ package s3
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -356,7 +357,7 @@ func (b *s3Backend) PutObject(
 		return result, err
 	}
 
-	paths := bucket.effectivePaths()
+	paths := rankedPaths(bucket)
 	if len(paths) == 0 {
 		return result, gofakes3.ErrNoSuchBucket
 	}
@@ -487,13 +488,24 @@ func fanOutPut(
 	if len(paths) == 0 {
 		return results
 	}
+	for i, p := range paths {
+		results[i] = putResult{path: p, err: context.Canceled}
+	}
+
 	// cancelCtx is cancelled by the first PolicyAll failure so that
 	// drivers which respect ctx.Done() can abort their in-flight writes
 	// instead of completing uploads the caller will discard.
+	// For PolicyAny, cancelCtx is cancelled as soon as any path succeeds,
+	// aborting the remaining in-flight writes so the client gets an immediate
+	// response and does not wait on slow/hanging targets.
 	cancelCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	var wg sync.WaitGroup
+	var mu sync.Mutex
 	var firstFailOnce sync.Once
+	var firstSuccessOnce sync.Once
+	successCh := make(chan struct{}, 1)
+
 	for i, p := range paths {
 		wg.Add(1)
 		go func(i int, p string) {
@@ -503,10 +515,13 @@ func fanOutPut(
 					// A bad storage driver must not crash the gateway.
 					// Translate the panic into an error so the caller's
 					// error handling treats this path as failed.
+					mu.Lock()
 					results[i] = putResult{
 						path: p,
 						err:  fmt.Errorf("storage driver panic on path %s: %v", p, r),
 					}
+					mu.Unlock()
+
 					if probeBucket != "" {
 						probesFor(probeBucket).get(p).recordFailure()
 					}
@@ -517,27 +532,67 @@ func fanOutPut(
 			}()
 			start := time.Now()
 			err := putOnePath(cancelCtx, p, objectName, meta, mtime, size, cachePath)
+
+			mu.Lock()
 			results[i] = putResult{path: p, err: err}
+			mu.Unlock()
+
 			// Record latency for every path so the probe ranking also
 			// reflects write-side cost. Both successful and failed
 			// attempts are recorded (failures bump the failure counter,
 			// successes update the EWMA) so the ranking adapts to
-			// write-side health too.
+			// write-side health too. Cancelled attempts from PolicyAny
+			// early wins are not counted as hard storage failures.
 			if probeBucket != "" {
 				probe := probesFor(probeBucket).get(p)
 				if err == nil {
 					probe.recordSuccess(time.Since(start))
-				} else {
+				} else if !errors.Is(err, context.Canceled) {
 					probe.recordFailure()
 				}
 			}
 			if err != nil && policy == PolicyAll {
 				firstFailOnce.Do(cancel)
 			}
+			if err == nil && policy == PolicyAny {
+				firstSuccessOnce.Do(func() {
+					cancel()
+					select {
+					case successCh <- struct{}{}:
+					default:
+					}
+				})
+			}
 		}(i, p)
 	}
-	wg.Wait()
-	return results
+
+	if policy == PolicyAny {
+		done := make(chan struct{})
+		go func() {
+			wg.Wait()
+			close(done)
+		}()
+
+		select {
+		case <-done:
+		case <-successCh:
+			// One path succeeded! Wait briefly for in-flight paths to abort
+			// gracefully on cancelCtx, but do not hold the client hostage if a driver hangs.
+			select {
+			case <-done:
+			case <-time.After(2 * time.Second):
+			}
+		}
+	} else {
+		wg.Wait()
+	}
+
+	mu.Lock()
+	out := make([]putResult, len(results))
+	copy(out, results)
+	mu.Unlock()
+
+	return out
 }
 
 type putResult struct {
@@ -867,7 +922,7 @@ func (b *s3Backend) CopyObject(ctx context.Context, srcBucket, srcKey, dstBucket
 
 	// Build the same fan-out the PutObject path would build, but skip
 	// the cache step (we already cached to disk).
-	paths := dstB.effectivePaths()
+	paths := rankedPaths(dstB)
 	if len(paths) == 0 {
 		return result, gofakes3.ErrNoSuchBucket
 	}

@@ -201,11 +201,18 @@ func (w *replicationWorker) processWithGrace(p *pendingPut, grace time.Duration)
 		}
 		remaining := p.targets[:0]
 		for _, target := range p.targets {
+			start := time.Now()
 			if err := w.attempt(p, target); err != nil {
 				logf("background replicate to %s failed: %v (will retry)", target, err)
 				remaining = append(remaining, target)
+				if p.bucket != "" {
+					probesFor(p.bucket).get(target).recordFailure()
+				}
 			} else {
 				logf("background replicate to %s succeeded", target)
+				if p.bucket != "" {
+					probesFor(p.bucket).get(target).recordSuccess(time.Since(start))
+				}
 			}
 		}
 		p.targets = remaining
@@ -236,7 +243,9 @@ func (w *replicationWorker) processWithGrace(p *pendingPut, grace time.Duration)
 // attempt performs a single background put against the given target path.
 // The file is streamed from the cached temp file.
 func (w *replicationWorker) attempt(p *pendingPut, target string) error {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), replicationGrace())
+	defer cancel()
+
 	fmeta, _ := op.GetNearestMeta(target)
 	ctx = context.WithValue(ctx, conf.MetaKey, fmeta)
 	ctx = context.WithValue(ctx, conf.SkipHookKey, struct{}{})

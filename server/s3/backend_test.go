@@ -175,3 +175,45 @@ func TestFanOutPut_RecoversFromPanic(t *testing.T) {
 	}
 }
 
+// TestFanOutPut_EmptyPaths verifies fanOutPut returns an empty slice immediately
+// when no paths are provided.
+func TestFanOutPut_EmptyPaths(t *testing.T) {
+	results := fanOutPut(context.Background(), "", nil, "obj", nil, time.Now(), 0, "", PolicyAny)
+	if len(results) != 0 {
+		t.Fatalf("expected 0 results, got %d", len(results))
+	}
+}
+
+// TestFanOutPut_MultiplePaths verifies fanOutPut handles multiple paths concurrently
+// and returns results for each target path.
+func TestFanOutPut_MultiplePaths(t *testing.T) {
+	silenceReplicateLogs(t)
+	tmp, err := os.CreateTemp("", "s3-fanout-*")
+	if err != nil {
+		t.Fatalf("CreateTemp: %v", err)
+	}
+	tmp.Close()
+	defer os.Remove(tmp.Name())
+
+	results := fanOutPut(
+		context.Background(),
+		"multi-bucket",
+		[]string{"/nonexistent/mount/a", "/nonexistent/mount/b"},
+		"obj",
+		map[string]string{},
+		time.Now(),
+		0,
+		tmp.Name(),
+		PolicyAny,
+	)
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(results))
+	}
+	for i, r := range results {
+		if r.err == nil {
+			t.Fatalf("expected error for nonexistent path %d, got nil", i)
+		}
+	}
+}
+
+
