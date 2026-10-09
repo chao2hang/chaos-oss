@@ -237,11 +237,14 @@ export default function Preview() {
               </div>
             )}
 
-            {/* image */}
+            {/* image — prefer the direct link (raw_url) like audio/video; /p/
+                proxy rejects extensions outside proxy_types/text_types with 403
+                unless the storage has Web 代理 enabled */}
             {match.kind === 'image' && (
               <div className="flex justify-center">
                 <img
-                  src={pUrl}
+                  src={src}
+                  referrerPolicy="no-referrer"
                   alt={info.data.name}
                   className="max-h-[75vh] max-w-full rounded-md border border-border object-contain"
                 />
