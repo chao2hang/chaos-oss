@@ -3,8 +3,10 @@
 package s3
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -165,6 +167,81 @@ func silenceReplicateLogs(t *testing.T) {
 	prev := log.GetLevel()
 	log.SetLevel(log.PanicLevel)
 	t.Cleanup(func() { log.SetLevel(prev) })
+}
+
+// TestReplicationBudgetsScaleWithSize pins the size-aware budgets from
+// issue #9: the base is the configured grace (default 30 s with no
+// settings DB), the allowance assumes 1 MiB/s and caps at 10 minutes.
+func TestReplicationBudgetsScaleWithSize(t *testing.T) {
+	if got := sizeAllowance(0); got != 0 {
+		t.Fatalf("sizeAllowance(0) = %v, want 0", got)
+	}
+	if got := sizeAllowance(100 << 20); got != 100*time.Second {
+		t.Fatalf("sizeAllowance(100MiB) = %v, want 100s", got)
+	}
+	if got := sizeAllowance(5 << 30); got != 600*time.Second {
+		t.Fatalf("sizeAllowance(5GiB) = %v, want 600s cap", got)
+	}
+	grace := replicationGrace()
+	if grace != 30*time.Second {
+		t.Fatalf("default replicationGrace() = %v, want 30s", grace)
+	}
+	if got := attemptTimeout(100 << 20); got != 130*time.Second {
+		t.Fatalf("attemptTimeout(100MiB) = %v, want 130s", got)
+	}
+	if got := backgroundBudget(100 << 20); got != 160*time.Second {
+		t.Fatalf("backgroundBudget(100MiB) = %v, want 160s", got)
+	}
+	// Small objects keep the old snappy behavior.
+	if got := backgroundBudget(0); got != 60*time.Second {
+		t.Fatalf("backgroundBudget(0) = %v, want 60s", got)
+	}
+}
+
+// TestProcessWithGrace_BudgetAllowsRetry verifies a failing target keeps
+// getting retries within the provided budget (instead of being killed by
+// a hard 30 s attempt cap), and that the DATA LOSS bookwriting (temp
+// file removal + retained targets) still happens when the budget ends.
+func TestProcessWithGrace_BudgetAllowsRetry(t *testing.T) {
+	silenceReplicateLogs(t)
+	var attempts int32
+	old := replicateAttemptFn
+	replicateAttemptFn = func(w *replicationWorker, p *pendingPut, target string) error {
+		atomic.AddInt32(&attempts, 1)
+		time.Sleep(50 * time.Millisecond)
+		return errors.New("simulated slow failure")
+	}
+	t.Cleanup(func() { replicateAttemptFn = old })
+
+	tmp := tempFileWithContent(t, []byte("payload"))
+	w := newTestWorker()
+	p := &pendingPut{
+		bucket:     "budget-bucket",
+		object:     "o",
+		meta:       map[string]string{},
+		cachedFile: tmp,
+		size:       42,
+		ctime:      time.Now(),
+		targets:    []string{"/fake/target"},
+	}
+	start := time.Now()
+	// Budget larger than one attempt + the 500 ms first backoff so the
+	// loop must reach a second attempt, but short enough to be quick.
+	w.processWithGrace(p, 1200*time.Millisecond)
+	elapsed := time.Since(start)
+
+	if got := atomic.LoadInt32(&attempts); got < 2 {
+		t.Fatalf("expected at least 2 attempts within the budget, got %d", got)
+	}
+	if elapsed > 3*time.Second {
+		t.Fatalf("processWithGrace overran its budget: %v", elapsed)
+	}
+	if _, err := os.Stat(tmp); !os.IsNotExist(err) {
+		t.Fatal("temp file must be removed when the budget expires")
+	}
+	if len(p.targets) != 1 {
+		t.Fatalf("failing target must be retained for the DATA LOSS log, got %d", len(p.targets))
+	}
 }
 
 func tempFileWithContent(t *testing.T, body []byte) string {

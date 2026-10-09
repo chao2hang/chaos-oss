@@ -479,6 +479,19 @@ func (b *s3Backend) PutObject(
 // (fast, slow, hanging) without loading a real storage driver.
 var putOnePathFn = putOnePath
 
+// sizeAllowance extends a timeout by the time needed to transfer size
+// bytes at a minimum assumed throughput of 1 MiB/s, capped at 10 extra
+// minutes. Both the synchronous fan-out deadline and the background
+// replication budgets scale with it, so legitimately large uploads are
+// not cut off while retry-prone hangs stay bounded.
+func sizeAllowance(size int64) time.Duration {
+	allowance := size / (1 << 20)
+	if allowance > 600 {
+		allowance = 600
+	}
+	return time.Duration(allowance) * time.Second
+}
+
 // putPathTimeout derives the per-path write deadline for a fan-out
 // covering size bytes from the s3_put_path_timeout_seconds setting. A
 // size allowance at a minimum assumed throughput of 1 MiB/s (capped at
@@ -490,11 +503,7 @@ func putPathTimeout(size int64) time.Duration {
 	if base <= 0 {
 		return 0
 	}
-	allowance := size / (1 << 20)
-	if allowance > 600 {
-		allowance = 600
-	}
-	return time.Duration(base+int(allowance)) * time.Second
+	return time.Duration(base)*time.Second + sizeAllowance(size)
 }
 
 // overallWaitMargin bounds how long fanOutPut waits beyond the per-path

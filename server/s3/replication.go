@@ -139,7 +139,7 @@ func (w *replicationWorker) run() {
 				}
 			}
 		case p := <-w.queue:
-			w.processWithGrace(p, replicationGrace())
+			w.processWithGrace(p, backgroundBudget(p.size))
 		}
 	}
 }
@@ -169,6 +169,29 @@ func replicationGrace() time.Duration {
 		v = 600
 	}
 	return time.Duration(v) * time.Second
+}
+
+// attemptTimeout bounds a single background replication attempt: the
+// configured grace as a base plus a size allowance. Re-uploading a
+// 100 MB raw photo through a netdisk API routinely takes minutes; the
+// old fixed 30 s deadline turned every large background copy into a
+// guaranteed context deadline exceeded (issue #9).
+func attemptTimeout(size int64) time.Duration {
+	return replicationGrace() + sizeAllowance(size)
+}
+
+// backgroundBudget is the total wall-clock a single pendingPut may spend
+// in the worker: one size-aware attempt plus a full extra grace window,
+// so targets that fail fast still get meaningful retries before the
+// temp file is released.
+func backgroundBudget(size int64) time.Duration {
+	return attemptTimeout(size) + replicationGrace()
+}
+
+// replicateAttemptFn is the single-attempt hook used by
+// processWithGrace; tests substitute fakes to drive the retry loop.
+var replicateAttemptFn = func(w *replicationWorker, p *pendingPut, target string) error {
+	return w.attempt(p, target)
 }
 
 // processWithGrace retries a single pending put with backoff and a
@@ -202,7 +225,7 @@ func (w *replicationWorker) processWithGrace(p *pendingPut, grace time.Duration)
 		remaining := p.targets[:0]
 		for _, target := range p.targets {
 			start := time.Now()
-			if err := w.attempt(p, target); err != nil {
+			if err := replicateAttemptFn(w, p, target); err != nil {
 				logf("background replicate to %s failed: %v (will retry)", target, err)
 				remaining = append(remaining, target)
 				if p.bucket != "" {
@@ -243,7 +266,9 @@ func (w *replicationWorker) processWithGrace(p *pendingPut, grace time.Duration)
 // attempt performs a single background put against the given target path.
 // The file is streamed from the cached temp file.
 func (w *replicationWorker) attempt(p *pendingPut, target string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), replicationGrace())
+	// Per-attempt deadline scales with the object size (issue #9); the
+	// worker-wide backgroundBudget still bounds the whole item.
+	ctx, cancel := context.WithTimeout(context.Background(), attemptTimeout(p.size))
 	defer cancel()
 
 	fmeta, _ := op.GetNearestMeta(target)
