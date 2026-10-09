@@ -1099,8 +1099,8 @@ packages:
     peerDependencies:
       vite: ^4.2.0 || ^5.0.0 || ^6.0.0 || ^7.0.0 || ^8.0.0
 
-  ansi-regex@5.0.0:
-    resolution: {integrity: sha512-bY6fj56OUQ0hU1KjFNDQuJFezqKdrAyFdIevADiqrWHwSlbmBNMHp5ak2f40Pm8JTFyM2mqxkG6ngkHO11f/lg==}
+  ansi-regex@5.0.1:
+    resolution: {integrity: sha512-quJQXlTSUGL2LH9SUXo8VwsY4soanhgo6LNSm84E1LBcE8s3O0wpdiRzyR9z/ZZJMlMWv37qOOb9pdJlMUEKFQ==}
     engines: {node: '>=8'}
 
   ansi-styles@4.0.0:
@@ -2777,7 +2777,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  ansi-regex@5.0.0: {}
+  ansi-regex@5.0.1: {}
 
   ansi-styles@4.0.0:
     dependencies:
@@ -3771,7 +3771,7 @@ snapshots:
 
   strip-ansi@6.0.0:
     dependencies:
-      ansi-regex: 5.0.0
+      ansi-regex: 5.0.1
 
   style-to-js@1.0.0:
     dependencies:
