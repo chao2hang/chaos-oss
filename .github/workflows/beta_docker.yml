@@ -30,6 +30,26 @@ jobs:
         with:
           go-version: "1.26.6"
 
+      # go:embed picks up public/dist at compile time; build the in-repo
+      # frontend first so the image never ships a stale committed dist
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Build frontend
+        run: |
+          cd frontend
+          pnpm install --frozen-lockfile
+          pnpm build
+
       - name: Build Linux amd64 static binary
         run: |
           mkdir -p build/linux/amd64
