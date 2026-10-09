@@ -126,6 +126,7 @@ const LABELS: Record<string, string> = {
   s3_secret_access_key: 'S3 访问密钥 Secret',
   s3_replication_default_policy: '复制默认策略',
   s3_replication_grace_seconds: '复制重试宽限期（秒）',
+  s3_put_path_timeout_seconds: '单路径写入超时（秒）',
   ftp_public_host: 'FTP 公网地址',
   ftp_pasv_port_map: '被动端口映射',
   ftp_mandatory_tls: '强制 TLS',

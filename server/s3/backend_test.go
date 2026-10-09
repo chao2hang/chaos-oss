@@ -4,6 +4,7 @@ package s3
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"os"
 	"testing"
@@ -158,6 +159,7 @@ func TestFanOutPut_RecoversFromPanic(t *testing.T) {
 		int64(len("payload")),
 		tmp.Name(),
 		PolicyAny,
+		0,
 	)
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
@@ -178,7 +180,7 @@ func TestFanOutPut_RecoversFromPanic(t *testing.T) {
 // TestFanOutPut_EmptyPaths verifies fanOutPut returns an empty slice immediately
 // when no paths are provided.
 func TestFanOutPut_EmptyPaths(t *testing.T) {
-	results := fanOutPut(context.Background(), "", nil, "obj", nil, time.Now(), 0, "", PolicyAny)
+	results := fanOutPut(context.Background(), "", nil, "obj", nil, time.Now(), 0, "", PolicyAny, 0)
 	if len(results) != 0 {
 		t.Fatalf("expected 0 results, got %d", len(results))
 	}
@@ -205,6 +207,7 @@ func TestFanOutPut_MultiplePaths(t *testing.T) {
 		0,
 		tmp.Name(),
 		PolicyAny,
+		0,
 	)
 	if len(results) != 2 {
 		t.Fatalf("expected 2 results, got %d", len(results))
@@ -213,6 +216,151 @@ func TestFanOutPut_MultiplePaths(t *testing.T) {
 		if r.err == nil {
 			t.Fatalf("expected error for nonexistent path %d, got nil", i)
 		}
+	}
+}
+
+// ---- fanOutPut per-path timeout & write breaker (issue #8) ----
+
+// stubPutOnePath swaps the package-level writer for the duration of the
+// test, letting us simulate fast, hanging, or ctx-ignorant drivers.
+func stubPutOnePath(t *testing.T, fn func(ctx context.Context, basePath, objectName string, meta map[string]string, mtime time.Time, size int64, cachePath string) error) {
+	t.Helper()
+	old := putOnePathFn
+	putOnePathFn = fn
+	t.Cleanup(func() { putOnePathFn = old })
+}
+
+// A ctx-respecting driver that never finishes must be cut off by the
+// per-path deadline, and fanOutPut must return promptly afterwards.
+func TestFanOutPut_PerPathTimeout_CtxAwareDriver(t *testing.T) {
+	silenceReplicateLogs(t)
+	probeRegistry.Delete("pto-bucket")
+	stubPutOnePath(t, func(ctx context.Context, basePath, objectName string, meta map[string]string, mtime time.Time, size int64, cachePath string) error {
+		<-ctx.Done()
+		return ctx.Err()
+	})
+
+	start := time.Now()
+	results := fanOutPut(context.Background(), "pto-bucket", []string{"/hang/a"}, "obj", nil, time.Now(), 0, "", PolicyAny, 200*time.Millisecond)
+	elapsed := time.Since(start)
+
+	if elapsed > 1500*time.Millisecond {
+		t.Fatalf("fanOutPut took %v; expected bounded by deadline+margin (~450ms)", elapsed)
+	}
+	if len(results) != 1 || !errors.Is(results[0].err, context.DeadlineExceeded) {
+		t.Fatalf("expected DeadlineExceeded for hanging path, got %+v", results)
+	}
+	if probesFor("pto-bucket").get("/hang/a").failures.Load() == 0 {
+		t.Fatal("expected probe failure to be recorded for timed-out path")
+	}
+}
+
+// A driver that ignores ctx entirely must still not pin the request: the
+// overall wait bound stamps unfinished slots as timeouts while the
+// goroutine lingers in the background.
+func TestFanOutPut_PerPathTimeout_CtxIgnorantDriver(t *testing.T) {
+	silenceReplicateLogs(t)
+	probeRegistry.Delete("stuck-bucket")
+	stubPutOnePath(t, func(ctx context.Context, basePath, objectName string, meta map[string]string, mtime time.Time, size int64, cachePath string) error {
+		select {
+		case <-time.After(30 * time.Second):
+			return nil
+		}
+	})
+
+	start := time.Now()
+	results := fanOutPut(context.Background(), "stuck-bucket", []string{"/stuck/a"}, "obj", nil, time.Now(), 0, "", PolicyAll, 200*time.Millisecond)
+	elapsed := time.Since(start)
+
+	if elapsed > 2*time.Second {
+		t.Fatalf("fanOutPut waited %v on a ctx-ignorant driver; overall bound failed", elapsed)
+	}
+	if len(results) != 1 || !errors.Is(results[0].err, context.DeadlineExceeded) {
+		t.Fatalf("expected stamped DeadlineExceeded, got %+v", results)
+	}
+	if probesFor("stuck-bucket").get("/stuck/a").failures.Load() == 0 {
+		t.Fatal("expected stamped timeout to bump the probe failure counter")
+	}
+}
+
+// Under policy "any" the fast path still wins immediately; the timeout
+// must not slow the healthy case down.
+func TestFanOutPut_AnyPolicyFastWinUnaffected(t *testing.T) {
+	silenceReplicateLogs(t)
+	probeRegistry.Delete("race-bucket")
+	stubPutOnePath(t, func(ctx context.Context, basePath, objectName string, meta map[string]string, mtime time.Time, size int64, cachePath string) error {
+		if basePath == "/fast" {
+			return nil
+		}
+		<-ctx.Done()
+		return ctx.Err()
+	})
+
+	start := time.Now()
+	results := fanOutPut(context.Background(), "race-bucket", []string{"/slow", "/fast"}, "obj", nil, time.Now(), 0, "", PolicyAny, 30*time.Second)
+	elapsed := time.Since(start)
+
+	if elapsed > time.Second {
+		t.Fatalf("fast win took %v; early-cancel path regressed", elapsed)
+	}
+	ok := false
+	for _, r := range results {
+		if r.err == nil {
+			ok = true
+		}
+	}
+	if !ok {
+		t.Fatalf("expected at least one success, got %+v", results)
+	}
+}
+
+// unhealthy() opens the breaker after pathBreakerFailures consecutive
+// recent failures and closes it again on the next success.
+func TestProbeUnhealthyBreaker(t *testing.T) {
+	probeRegistry.Delete("brk-bucket")
+	pr := probesFor("brk-bucket").get("/x")
+
+	for i := 0; i < pathBreakerFailures-1; i++ {
+		pr.recordFailure()
+	}
+	if pr.unhealthy() {
+		t.Fatal("breaker should still be closed below the failure threshold")
+	}
+	pr.recordFailure()
+	if !pr.unhealthy() {
+		t.Fatal("breaker should open at the failure threshold")
+	}
+	pr.recordSuccess(10 * time.Millisecond)
+	if pr.unhealthy() {
+		t.Fatal("a success must heal the breaker")
+	}
+}
+
+// splitUnhealthyPaths skips only breaker-open paths, only under policy
+// "any", and never skips everything.
+func TestSplitUnhealthyPaths(t *testing.T) {
+	probeRegistry.Delete("split-bucket")
+	probes := probesFor("split-bucket")
+	for i := 0; i < pathBreakerFailures; i++ {
+		probes.get("/bad").recordFailure()
+	}
+
+	active, skipped := splitUnhealthyPaths("split-bucket", []string{"/bad", "/good"}, PolicyAny)
+	if len(active) != 1 || active[0] != "/good" || len(skipped) != 1 || skipped[0] != "/bad" {
+		t.Fatalf("expected active=[/good] skipped=[/bad], got active=%v skipped=%v", active, skipped)
+	}
+
+	for i := 0; i < pathBreakerFailures; i++ {
+		probes.get("/good").recordFailure()
+	}
+	active, skipped = splitUnhealthyPaths("split-bucket", []string{"/bad", "/good"}, PolicyAny)
+	if len(active) != 2 || skipped != nil {
+		t.Fatalf("all-broken must fall back to writing everywhere, got active=%v skipped=%v", active, skipped)
+	}
+
+	active, skipped = splitUnhealthyPaths("split-bucket", []string{"/bad", "/good"}, PolicyAll)
+	if len(active) != 2 || skipped != nil {
+		t.Fatalf("policy all must never skip, got active=%v skipped=%v", active, skipped)
 	}
 }
 

@@ -231,6 +231,7 @@ func InitialSettings() []model.SettingItem {
 		{Key: conf.S3AllowAnonymousAccess, Value: "false", Type: conf.TypeBool, Group: model.S3, Flag: model.PRIVATE, Help: `Allow unauthenticated S3 access ONLY when no access key is configured. Disabled by default; enabling it exposes the gateway anonymously.`},
 		{Key: conf.S3ReplicationDefaultPolicy, Value: "any", Type: conf.TypeSelect, Group: model.S3, Flag: model.PUBLIC, Options: `["any","all"]`},
 		{Key: conf.S3ReplicationGraceSeconds, Value: "30", Type: conf.TypeNumber, Group: model.S3, Flag: model.PUBLIC},
+		{Key: conf.S3PutPathTimeoutSeconds, Value: "60", Type: conf.TypeNumber, Group: model.S3, Flag: model.PUBLIC, Help: `Base deadline for one synchronous replication write inside a fan-out, in seconds (large uploads add a size allowance assuming at least 1 MiB/s). A hanging drive is abandoned and retried in the background instead of blocking the S3 client. 0 disables the deadline.`},
 
 		// ftp settings
 		{Key: conf.FTPPublicHost, Value: "127.0.0.1", Type: conf.TypeString, Group: model.FTP, Flag: model.PRIVATE},

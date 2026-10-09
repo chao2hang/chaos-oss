@@ -137,6 +137,7 @@ const (
 	S3AllowAnonymousAccess     = "s3_allow_anonymous_access"     // bool; explicit opt-in for unauthenticated access when no keys exist
 	S3ReplicationDefaultPolicy = "s3_replication_default_policy" // "any" or "all"
 	S3ReplicationGraceSeconds  = "s3_replication_grace_seconds"  // background retry grace window
+	S3PutPathTimeoutSeconds    = "s3_put_path_timeout_seconds"   // per-path sync write deadline; 0 disables
 
 	// qbittorrent
 	QbittorrentUrl      = "qbittorrent_url"

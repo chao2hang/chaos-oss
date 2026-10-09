@@ -459,6 +459,7 @@ export const EN: Record<string, string> = {
   'S3 访问密钥 Secret': 'S3 Secret Access Key',
   '复制默认策略': 'Replication default policy',
   '复制重试宽限期（秒）': 'Replication retry grace (seconds)',
+  '单路径写入超时（秒）': 'Per-path write timeout (seconds)',
   'FTP 公网地址': 'FTP public host',
   '被动端口映射': 'Passive port map',
   '强制 TLS': 'Mandatory TLS',

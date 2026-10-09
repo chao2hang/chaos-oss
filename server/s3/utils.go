@@ -260,6 +260,25 @@ func (pr *pathProbe) score() int64 {
 	return ewma + int64(fails)*2000
 }
 
+// Write-side breaker thresholds: a path with at least this many
+// consecutive failures whose last outcome is still recent is treated as
+// open and skipped on the synchronous fan-out under policy "any".
+const (
+	pathBreakerFailures = 5
+	pathBreakerCooldown = 3 * time.Minute
+)
+
+// unhealthy reports whether this path is failing repeatedly and recently
+// enough that synchronous writes should steer around it. After the
+// cooldown the breaker half-opens: the next write retries in-band and a
+// success (recordSuccess) resets the counter.
+func (pr *pathProbe) unhealthy() bool {
+	if pr.failures.Load() < pathBreakerFailures {
+		return false
+	}
+	return time.Since(time.UnixMilli(pr.lastSeen.Load())) < pathBreakerCooldown
+}
+
 func prefixParser(p *gofakes3.Prefix) (path, remaining string) {
 	idx := strings.LastIndexByte(p.Prefix, '/')
 	if idx < 0 {

@@ -407,7 +407,12 @@ func (b *s3Backend) PutObject(
 	}()
 
 	policy := bucket.writePolicy()
-	results := fanOutPut(ctx, bucketName, paths, objectName, meta, mtime, size, cachePath, policy)
+	// Breaker: under policy "any", paths that failed repeatedly within the
+	// recent cooldown are skipped on the synchronous fan-out and handed
+	// straight to the background replication worker, so a flow-capped or
+	// hanging drive cannot stall an otherwise healthy write.
+	syncPaths, breakerSkipped := splitUnhealthyPaths(bucketName, paths, policy)
+	results := fanOutPut(ctx, bucketName, syncPaths, objectName, meta, mtime, size, cachePath, policy, putPathTimeout(size))
 
 	// All paths failed: report the first error so the client knows the
 	// upload didn't land anywhere.
@@ -439,6 +444,9 @@ func (b *s3Backend) PutObject(
 				pending = append(pending, r.path)
 			}
 		}
+		// Breaker-skipped paths land in the same async retry queue as
+		// synchronously failed ones; the temp file keeps the payload.
+		pending = append(pending, breakerSkipped...)
 		if len(pending) > 0 {
 			// The worker takes ownership of the temp file. Hand off
 			// the path under a different name to suppress the
@@ -466,6 +474,65 @@ func (b *s3Backend) PutObject(
 	return result, nil
 }
 
+// putOnePathFn is the single-path writer used by fanOutPut. It exists as
+// a package-level indirection so unit tests can substitute fake writers
+// (fast, slow, hanging) without loading a real storage driver.
+var putOnePathFn = putOnePath
+
+// putPathTimeout derives the per-path write deadline for a fan-out
+// covering size bytes from the s3_put_path_timeout_seconds setting. A
+// size allowance at a minimum assumed throughput of 1 MiB/s (capped at
+// 10 extra minutes) keeps legitimately large uploads from being cut off
+// by the base deadline, while drives stuck in endless retries are still
+// abandoned. A non-positive setting disables the deadline entirely.
+func putPathTimeout(size int64) time.Duration {
+	base := setting.GetInt(conf.S3PutPathTimeoutSeconds, 60)
+	if base <= 0 {
+		return 0
+	}
+	allowance := size / (1 << 20)
+	if allowance > 600 {
+		allowance = 600
+	}
+	return time.Duration(base+int(allowance)) * time.Second
+}
+
+// overallWaitMargin bounds how long fanOutPut waits beyond the per-path
+// deadline for the last goroutine to unwind. Drives that ignore ctx can
+// linger in the background; the client is never held hostage.
+func overallWaitMargin(perPathTimeout time.Duration) time.Duration {
+	margin := perPathTimeout / 10
+	if margin < 250*time.Millisecond {
+		margin = 250 * time.Millisecond
+	}
+	if margin > 5*time.Second {
+		margin = 5 * time.Second
+	}
+	return margin
+}
+
+// splitUnhealthyPaths steers the synchronous fan-out around breaker-open
+// paths. Only policy "any" may skip targets (policy "all" must write
+// everywhere). When every path looks broken we give up skipping: one of
+// them has to absorb the write anyway and a success heals the breaker.
+func splitUnhealthyPaths(bucket string, paths []string, policy string) (active, skipped []string) {
+	if policy != PolicyAny || len(paths) < 2 {
+		return paths, nil
+	}
+	probes := probesFor(bucket)
+	for _, p := range paths {
+		if probes.get(p).unhealthy() {
+			skipped = append(skipped, p)
+		} else {
+			active = append(active, p)
+		}
+	}
+	if len(active) == 0 {
+		return paths, nil
+	}
+	return active, skipped
+}
+
 // fanOutPut issues concurrent fs.PutDirectly calls for every target path.
 // It returns a slice of (path, error) pairs in the same order. When
 // policy is PolicyAll the first failure short-circuits the rest via a
@@ -473,6 +540,10 @@ func (b *s3Backend) PutObject(
 // probeBucket, when non-empty, is the bucket whose path probes should be
 // updated with the per-path write latency; pass "" to skip probe updates
 // (used when the caller has no bucket context, e.g. unit tests).
+// perPathTimeout bounds each path's write; once it expires plus a small
+// grace margin, still-unfinished paths are reported as timed out (and
+// bumped as probe failures) so a hanging drive cannot pin the whole
+// request. Pass 0 to disable the bound.
 func fanOutPut(
 	ctx context.Context,
 	probeBucket string,
@@ -483,6 +554,7 @@ func fanOutPut(
 	size int64,
 	cachePath string,
 	policy string,
+	perPathTimeout time.Duration,
 ) []putResult {
 	results := make([]putResult, len(paths))
 	if len(paths) == 0 {
@@ -531,7 +603,16 @@ func fanOutPut(
 				}
 			}()
 			start := time.Now()
-			err := putOnePath(cancelCtx, p, objectName, meta, mtime, size, cachePath)
+			// Independent per-path deadline: a drive stuck in endless
+			// retries must not stretch the whole fan-out. Drivers that
+			// ignore ctx are still bounded by the overall wait below.
+			pctx := cancelCtx
+			if perPathTimeout > 0 {
+				var pcancel context.CancelFunc
+				pctx, pcancel = context.WithTimeout(cancelCtx, perPathTimeout)
+				defer pcancel()
+			}
+			err := putOnePathFn(pctx, p, objectName, meta, mtime, size, cachePath)
 
 			mu.Lock()
 			results[i] = putResult{path: p, err: err}
@@ -566,13 +647,35 @@ func fanOutPut(
 		}(i, p)
 	}
 
-	if policy == PolicyAny {
-		done := make(chan struct{})
-		go func() {
-			wg.Wait()
-			close(done)
-		}()
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
 
+	// Overall bound: even when a driver ignores ctx deadlines entirely,
+	// stamp whatever is still unfinished and return. Stragglers unwind in
+	// the background via cancelCtx (released by the deferred cancel above)
+	// and self-report to the probe once they eventually return.
+	stampUnfinished := func() {
+		mu.Lock()
+		defer mu.Unlock()
+		for i := range results {
+			if results[i].err == context.Canceled { // untouched sentinel slot
+				results[i].err = fmt.Errorf("%w: replication write to %s exceeded %s",
+					context.DeadlineExceeded, paths[i], perPathTimeout)
+				if probeBucket != "" {
+					probesFor(probeBucket).get(paths[i]).recordFailure()
+				}
+			}
+		}
+	}
+	var overallC <-chan time.Time
+	if perPathTimeout > 0 {
+		overallC = time.After(perPathTimeout + overallWaitMargin(perPathTimeout))
+	}
+
+	if policy == PolicyAny {
 		select {
 		case <-done:
 		case <-successCh:
@@ -582,9 +685,15 @@ func fanOutPut(
 			case <-done:
 			case <-time.After(2 * time.Second):
 			}
+		case <-overallC:
+			stampUnfinished()
 		}
 	} else {
-		wg.Wait()
+		select {
+		case <-done:
+		case <-overallC:
+			stampUnfinished()
+		}
 	}
 
 	mu.Lock()
@@ -926,7 +1035,7 @@ func (b *s3Backend) CopyObject(ctx context.Context, srcBucket, srcKey, dstBucket
 	if len(paths) == 0 {
 		return result, gofakes3.ErrNoSuchBucket
 	}
-	results := fanOutPut(ctx, dstBucket, paths, dstKey, meta, srcNode.ModTime(), srcObj.Size, cachePath, dstB.writePolicy())
+	results := fanOutPut(ctx, dstBucket, paths, dstKey, meta, srcNode.ModTime(), srcObj.Size, cachePath, dstB.writePolicy(), putPathTimeout(srcObj.Size))
 
 	allFailed := true
 	for _, r := range results {
